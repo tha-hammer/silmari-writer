@@ -3,10 +3,12 @@
 import os
 import uuid
 from datetime import datetime
+from enum import Enum
 from typing import Optional
+from uuid import UUID
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
-from pydantic import BaseModel, Field
+from fastapi import FastAPI, File, HTTPException, UploadFile, Response
+from pydantic import BaseModel, Field, field_validator
 
 # Constants
 UPLOAD_DIR = "./uploads"
@@ -26,9 +28,16 @@ ALLOWED_CONTENT_TYPES = {
     "application/pdf",
 }
 
+
+# Enums
+class MessageRole(str, Enum):
+    """Allowed message roles."""
+    USER = "user"
+    ASSISTANT = "assistant"
+    SYSTEM = "system"
+
+
 # Pydantic Models
-
-
 class FileMetadata(BaseModel):
     """Metadata for uploaded files."""
 
@@ -41,8 +50,8 @@ class FileMetadata(BaseModel):
 class Message(BaseModel):
     """A message within a conversation."""
 
-    id: str
-    role: str
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    role: MessageRole
     content: str
     created_at: datetime = Field(default_factory=datetime.utcnow)
     attachments: list[str] = Field(default_factory=list)
@@ -51,11 +60,37 @@ class Message(BaseModel):
 class Conversation(BaseModel):
     """A conversation containing messages."""
 
-    id: str
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     title: str
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     messages: list[Message] = Field(default_factory=list)
+
+    @field_validator("title")
+    @classmethod
+    def title_not_empty(cls, v: str) -> str:
+        if v == "":
+            raise ValueError("Title cannot be empty")
+        return v
+
+
+class ConversationCreate(BaseModel):
+    """Request body for creating a conversation."""
+    title: str
+
+
+class ConversationUpdate(BaseModel):
+    """Request body for updating a conversation."""
+    title: Optional[str] = None
+
+
+class ConversationListItem(BaseModel):
+    """Conversation summary for list responses."""
+    id: str
+    title: str
+    created_at: datetime
+    updated_at: datetime
+    message_count: int
 
 
 # In-memory stores for development/testing
@@ -141,3 +176,97 @@ async def get_file_metadata(file_id: str) -> FileMetadata:
         raise HTTPException(status_code=404, detail="Resource not found")
 
     return file_store[file_id]
+
+
+# Helper function for consistent 404 handling
+def get_conversation_or_404(conversation_id: str) -> Conversation:
+    """Get a conversation by ID or raise HTTP 404."""
+    if conversation_id not in conversation_store:
+        raise HTTPException(status_code=404, detail="Resource not found")
+    return conversation_store[conversation_id]
+
+
+def validate_uuid(value: str) -> str:
+    """Validate that a string is a valid UUID format."""
+    try:
+        UUID(value)
+        return value
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Invalid UUID format")
+
+
+# Conversation Endpoints
+@app.get("/api/conversations", response_model=list[ConversationListItem])
+async def list_conversations() -> list[ConversationListItem]:
+    """List all conversations.
+
+    Returns a list of all conversations with summary information.
+    """
+    return [
+        ConversationListItem(
+            id=conv.id,
+            title=conv.title,
+            created_at=conv.created_at,
+            updated_at=conv.updated_at,
+            message_count=len(conv.messages),
+        )
+        for conv in conversation_store.values()
+    ]
+
+
+@app.post("/api/conversations", status_code=201, response_model=Conversation)
+async def create_conversation(data: ConversationCreate) -> Conversation:
+    """Create a new conversation.
+
+    Accepts JSON body with required 'title' field.
+    """
+    # Validate empty title (Pydantic validator raises ValueError)
+    if data.title == "":
+        raise HTTPException(status_code=400, detail="Title cannot be empty")
+
+    conversation = Conversation(title=data.title)
+    conversation_store[conversation.id] = conversation
+    return conversation
+
+
+@app.get("/api/conversations/{conversation_id}", response_model=Conversation)
+async def get_conversation(conversation_id: str) -> Conversation:
+    """Get a single conversation by ID.
+
+    Returns the full conversation including all messages.
+    """
+    validate_uuid(conversation_id)
+    return get_conversation_or_404(conversation_id)
+
+
+@app.put("/api/conversations/{conversation_id}", response_model=Conversation)
+async def update_conversation(conversation_id: str, data: ConversationUpdate) -> Conversation:
+    """Update a conversation.
+
+    Accepts JSON body with optional 'title' field.
+    """
+    validate_uuid(conversation_id)
+    conversation = get_conversation_or_404(conversation_id)
+
+    # Validate empty title
+    if data.title == "":
+        raise HTTPException(status_code=400, detail="Title cannot be empty")
+
+    if data.title is not None:
+        conversation.title = data.title
+
+    conversation.updated_at = datetime.utcnow()
+    conversation_store[conversation_id] = conversation
+    return conversation
+
+
+@app.delete("/api/conversations/{conversation_id}", status_code=204)
+async def delete_conversation(conversation_id: str) -> Response:
+    """Delete a conversation.
+
+    Removes the conversation and all associated data.
+    """
+    validate_uuid(conversation_id)
+    get_conversation_or_404(conversation_id)
+    del conversation_store[conversation_id]
+    return Response(status_code=204)
