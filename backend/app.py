@@ -110,6 +110,64 @@ class TranscriptionResponse(BaseModel):
     language: Optional[str] = None
 
 
+class Theme(BaseModel):
+    """A theme extracted from text with confidence score."""
+
+    name: str
+    confidence: float
+
+    @field_validator("name")
+    @classmethod
+    def name_not_empty(cls, v: str) -> str:
+        if v == "":
+            raise ValueError("Name cannot be empty")
+        return v
+
+    @field_validator("confidence")
+    @classmethod
+    def confidence_in_range(cls, v: float) -> float:
+        if v < 0.0 or v > 1.0:
+            raise ValueError("Confidence must be between 0.0 and 1.0")
+        return v
+
+
+class ThemeExtractRequest(BaseModel):
+    """Request body for theme extraction."""
+    text: str
+
+    @field_validator("text")
+    @classmethod
+    def text_not_empty(cls, v: str) -> str:
+        if v == "":
+            raise ValueError("Text cannot be empty")
+        return v
+
+
+class GenerateRequest(BaseModel):
+    """Request body for content generation."""
+    themes: list[Theme]
+    prompt: str
+
+    @field_validator("prompt")
+    @classmethod
+    def prompt_not_empty(cls, v: str) -> str:
+        if v == "":
+            raise ValueError("Prompt cannot be empty")
+        return v
+
+    @field_validator("themes")
+    @classmethod
+    def themes_not_empty(cls, v: list[Theme]) -> list[Theme]:
+        if len(v) == 0:
+            raise ValueError("Themes cannot be empty")
+        return v
+
+
+class GenerateResponse(BaseModel):
+    """Response body for content generation."""
+    content: str
+
+
 # In-memory stores for development/testing
 file_store: dict[str, FileMetadata] = {}
 conversation_store: dict[str, Conversation] = {}
@@ -367,6 +425,127 @@ async def transcribe(file: UploadFile = File(...)) -> TranscriptionResponse:
             duration=result.get("duration"),
             language=result.get("language"),
         )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Service failed: {str(e)}"
+        )
+
+
+# Theme extraction function - can be mocked in tests
+async def extract_themes_llm(text: str) -> list[dict]:
+    """Extract themes from text using OpenAI GPT-4 API.
+
+    This function is designed to be mocked in tests.
+    In production, it calls the actual OpenAI GPT-4 API.
+
+    Args:
+        text: The text to extract themes from
+
+    Returns:
+        List of dicts with 'name' and 'confidence' keys
+    """
+    import json
+    import openai
+
+    client = openai.AsyncOpenAI()
+
+    system_prompt = """You are a theme extraction assistant. Analyze the provided text and extract the main themes.
+For each theme, provide a confidence score between 0.0 and 1.0 indicating how strongly that theme is present.
+Respond ONLY with a JSON array of objects, each with 'name' (string) and 'confidence' (float) fields.
+Example: [{"name": "adventure", "confidence": 0.9}, {"name": "friendship", "confidence": 0.75}]
+If no clear themes can be extracted, return an empty array: []"""
+
+    response = await client.chat.completions.create(
+        model="gpt-4",
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"Extract themes from this text:\n\n{text}"}
+        ],
+        temperature=0.3,
+    )
+
+    # Parse the JSON response
+    content = response.choices[0].message.content or "[]"
+    try:
+        themes = json.loads(content)
+        return themes
+    except json.JSONDecodeError:
+        return []
+
+
+# Content generation function - can be mocked in tests
+async def generate_content_llm(themes: list[dict], prompt: str) -> dict:
+    """Generate content based on themes using OpenAI GPT-4 API.
+
+    This function is designed to be mocked in tests.
+    In production, it calls the actual OpenAI GPT-4 API.
+
+    Args:
+        themes: List of theme dicts with 'name' and 'confidence' keys
+        prompt: User's prompt for content generation
+
+    Returns:
+        Dict with 'content' key containing generated text
+    """
+    import openai
+
+    client = openai.AsyncOpenAI()
+
+    # Build theme context
+    theme_list = ", ".join([t["name"] for t in themes])
+    theme_details = "\n".join([
+        f"- {t['name']} (confidence: {t['confidence']:.2f})"
+        for t in themes
+    ])
+
+    system_prompt = f"""You are a creative content generator. Generate content that naturally incorporates the following themes:
+
+{theme_details}
+
+The content should weave these themes together in a cohesive and engaging way."""
+
+    response = await client.chat.completions.create(
+        model="gpt-4",
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": prompt}
+        ],
+        temperature=0.7,
+    )
+
+    content = response.choices[0].message.content or ""
+    return {"content": content}
+
+
+@app.post("/api/themes/extract", response_model=list[Theme])
+async def extract_themes(data: ThemeExtractRequest) -> list[Theme]:
+    """Extract themes from text using LLM analysis.
+
+    Accepts JSON body with 'text' field.
+    Returns array of Theme objects with name and confidence score.
+    """
+    try:
+        result = await extract_themes_llm(data.text)
+        return [Theme(name=t["name"], confidence=t["confidence"]) for t in result]
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Service failed: {str(e)}"
+        )
+
+
+@app.post("/api/generate", response_model=GenerateResponse)
+async def generate_content(data: GenerateRequest) -> GenerateResponse:
+    """Generate content based on themes and prompt using LLM.
+
+    Accepts JSON body with 'themes' (array of Theme objects) and 'prompt' fields.
+    Returns generated content as JSON with 'content' field.
+    """
+    try:
+        themes_data = [{"name": t.name, "confidence": t.confidence} for t in data.themes]
+        result = await generate_content_llm(themes_data, data.prompt)
+        return GenerateResponse(content=result["content"])
     except Exception as e:
         raise HTTPException(
             status_code=500,
