@@ -518,13 +518,22 @@ The content should weave these themes together in a cohesive and engaging way.""
     return {"content": content}
 
 
+class ThemeExtractRequestRaw(BaseModel):
+    """Raw request body for theme extraction (without validation)."""
+    text: str = ""
+
+
 @app.post("/api/themes/extract", response_model=list[Theme])
-async def extract_themes(data: ThemeExtractRequest) -> list[Theme]:
+async def extract_themes(data: ThemeExtractRequestRaw) -> list[Theme]:
     """Extract themes from text using LLM analysis.
 
     Accepts JSON body with 'text' field.
     Returns array of Theme objects with name and confidence score.
     """
+    # Explicit validation for empty text - return 400 instead of 422
+    if data.text == "":
+        raise HTTPException(status_code=400, detail="Text content cannot be empty")
+
     try:
         result = await extract_themes_llm(data.text)
         return [Theme(name=t["name"], confidence=t["confidence"]) for t in result]
@@ -535,13 +544,27 @@ async def extract_themes(data: ThemeExtractRequest) -> list[Theme]:
         )
 
 
+class GenerateRequestRaw(BaseModel):
+    """Raw request body for content generation (with custom validation)."""
+    themes: list[Theme] = Field(default_factory=list)
+    prompt: str = ""
+
+
 @app.post("/api/generate", response_model=GenerateResponse)
-async def generate_content(data: GenerateRequest) -> GenerateResponse:
+async def generate_content(data: GenerateRequestRaw) -> GenerateResponse:
     """Generate content based on themes and prompt using LLM.
 
     Accepts JSON body with 'themes' (array of Theme objects) and 'prompt' fields.
     Returns generated content as JSON with 'content' field.
     """
+    # Explicit validation for empty themes - return 400 instead of 422
+    if len(data.themes) == 0:
+        raise HTTPException(status_code=400, detail="At least one theme is required")
+
+    # Explicit validation for empty prompt - return 400 instead of 422
+    if data.prompt == "":
+        raise HTTPException(status_code=400, detail="Prompt cannot be empty")
+
     try:
         themes_data = [{"name": t.name, "confidence": t.confidence} for t in data.themes]
         result = await generate_content_llm(themes_data, data.prompt)

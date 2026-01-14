@@ -110,8 +110,8 @@ class TestThemeExtractEndpoint:
                 assert response.status_code in [200, 400, 422, 500]
 
     @pytest.mark.asyncio
-    async def test_returns_422_if_text_field_missing(self):
-        """Returns 422 validation error if 'text' field is missing."""
+    async def test_returns_400_if_text_field_missing(self):
+        """Returns 400 error if 'text' field is missing."""
         async with AsyncClient(
             transport=ASGITransport(app=app), base_url="http://test"
         ) as client:
@@ -119,11 +119,11 @@ class TestThemeExtractEndpoint:
                 "/api/themes/extract",
                 json={}
             )
-            assert response.status_code == 422
+            assert response.status_code == 400
 
     @pytest.mark.asyncio
-    async def test_returns_422_if_text_field_empty(self):
-        """Returns 422 validation error if 'text' field is empty."""
+    async def test_returns_400_if_text_field_empty(self):
+        """Returns 400 error if 'text' field is empty."""
         async with AsyncClient(
             transport=ASGITransport(app=app), base_url="http://test"
         ) as client:
@@ -131,7 +131,7 @@ class TestThemeExtractEndpoint:
                 "/api/themes/extract",
                 json={"text": ""}
             )
-            assert response.status_code == 422
+            assert response.status_code == 400
 
     @pytest.mark.asyncio
     async def test_returns_array_of_theme_objects(self):
@@ -267,8 +267,8 @@ class TestGenerateEndpoint:
                 assert response.status_code in [200, 400, 422, 500]
 
     @pytest.mark.asyncio
-    async def test_returns_422_if_prompt_missing(self):
-        """Returns 422 validation error if 'prompt' field is missing."""
+    async def test_returns_400_if_prompt_missing(self):
+        """Returns 400 error if 'prompt' field is missing."""
         async with AsyncClient(
             transport=ASGITransport(app=app), base_url="http://test"
         ) as client:
@@ -276,11 +276,11 @@ class TestGenerateEndpoint:
                 "/api/generate",
                 json={"themes": [{"name": "test", "confidence": 0.5}]}
             )
-            assert response.status_code == 422
+            assert response.status_code == 400
 
     @pytest.mark.asyncio
-    async def test_returns_422_if_prompt_empty(self):
-        """Returns 422 validation error if 'prompt' field is empty."""
+    async def test_returns_400_if_prompt_empty(self):
+        """Returns 400 error if 'prompt' field is empty."""
         async with AsyncClient(
             transport=ASGITransport(app=app), base_url="http://test"
         ) as client:
@@ -291,11 +291,11 @@ class TestGenerateEndpoint:
                     "prompt": ""
                 }
             )
-            assert response.status_code == 422
+            assert response.status_code == 400
 
     @pytest.mark.asyncio
-    async def test_returns_422_if_themes_empty(self):
-        """Returns 422 validation error if 'themes' array is empty."""
+    async def test_returns_400_if_themes_empty(self):
+        """Returns 400 error if 'themes' array is empty."""
         async with AsyncClient(
             transport=ASGITransport(app=app), base_url="http://test"
         ) as client:
@@ -306,7 +306,7 @@ class TestGenerateEndpoint:
                     "prompt": "Write something."
                 }
             )
-            assert response.status_code == 422
+            assert response.status_code == 400
 
     @pytest.mark.asyncio
     async def test_returns_generated_content(self):
@@ -413,8 +413,8 @@ class TestGenerateEndpoint:
                 assert isinstance(content, str)
 
     @pytest.mark.asyncio
-    async def test_themes_missing_returns_422(self):
-        """Returns 422 if themes field is missing."""
+    async def test_themes_missing_returns_400(self):
+        """Returns 400 if themes field is missing."""
         async with AsyncClient(
             transport=ASGITransport(app=app), base_url="http://test"
         ) as client:
@@ -422,7 +422,7 @@ class TestGenerateEndpoint:
                 "/api/generate",
                 json={"prompt": "Write something."}
             )
-            assert response.status_code == 422
+            assert response.status_code == 400
 
 
 class TestOpenAIIntegration:
