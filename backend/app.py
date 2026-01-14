@@ -13,7 +13,17 @@ from pydantic import BaseModel, Field, field_validator
 # Constants
 UPLOAD_DIR = "./uploads"
 
-# Allowed content types for file uploads
+# Audio content types accepted for transcription
+AUDIO_CONTENT_TYPES = {
+    "audio/webm",
+    "audio/mpeg",
+    "audio/mp3",
+    "audio/wav",
+    "audio/ogg",
+    "audio/flac",
+}
+
+# Allowed content types for file uploads (includes audio and documents)
 ALLOWED_CONTENT_TYPES = {
     # Audio types for transcription
     "audio/webm",
@@ -91,6 +101,13 @@ class ConversationListItem(BaseModel):
     created_at: datetime
     updated_at: datetime
     message_count: int
+
+
+class TranscriptionResponse(BaseModel):
+    """Response model for audio transcription."""
+    text: str
+    duration: Optional[float] = None
+    language: Optional[str] = None
 
 
 # In-memory stores for development/testing
@@ -270,3 +287,88 @@ async def delete_conversation(conversation_id: str) -> Response:
     get_conversation_or_404(conversation_id)
     del conversation_store[conversation_id]
     return Response(status_code=204)
+
+
+# Transcription function - can be mocked in tests
+async def transcribe_audio(audio_content: bytes, filename: str) -> dict:
+    """Transcribe audio content using OpenAI Whisper API.
+
+    This function is designed to be mocked in tests.
+    In production, it calls the actual OpenAI Whisper API.
+
+    Args:
+        audio_content: The raw audio bytes
+        filename: Original filename for the audio file
+
+    Returns:
+        Dict with 'text', 'duration', and 'language' keys
+    """
+    # This is the real implementation that would call OpenAI
+    # In tests, this entire function is mocked
+    import openai
+
+    client = openai.AsyncOpenAI()
+
+    # Create a file-like object for the API
+    import io
+    audio_file = io.BytesIO(audio_content)
+    audio_file.name = filename
+
+    response = await client.audio.transcriptions.create(
+        model="whisper-1",
+        file=audio_file,
+        response_format="verbose_json"
+    )
+
+    return {
+        "text": response.text,
+        "duration": getattr(response, "duration", None),
+        "language": getattr(response, "language", None),
+    }
+
+
+@app.post("/api/transcribe", response_model=TranscriptionResponse)
+async def transcribe(file: UploadFile = File(...)) -> TranscriptionResponse:
+    """Transcribe audio file using OpenAI Whisper API.
+
+    Accepts multipart/form-data with an audio file.
+    Returns transcribed text with metadata.
+    """
+    # Read file content
+    content = await file.read()
+    file_size = len(content)
+
+    # Validate empty file
+    if file_size == 0:
+        raise HTTPException(status_code=400, detail="Empty file not allowed")
+
+    # Get and validate content type (case-insensitive)
+    content_type = (file.content_type or "").lower()
+
+    # Reject empty content type
+    if not content_type:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid content type: . Allowed types: {', '.join(sorted(AUDIO_CONTENT_TYPES))}"
+        )
+
+    # Validate content type against allowed audio types
+    if content_type not in AUDIO_CONTENT_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid content type: {content_type}. Allowed types: {', '.join(sorted(AUDIO_CONTENT_TYPES))}"
+        )
+
+    # Call transcription (mocked in tests)
+    try:
+        result = await transcribe_audio(content, file.filename or "audio.mp3")
+        return TranscriptionResponse(
+            text=result["text"],
+            duration=result.get("duration"),
+            language=result.get("language"),
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Service failed: {str(e)}"
+        )
