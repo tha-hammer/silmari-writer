@@ -1,0 +1,1706 @@
+{
+  "requirements": [
+    {
+      "id": "REQ_000",
+      "description": "The system must implement a FastAPI backend following TDD principles (Red-Green-Refactor) with async-native support, automatic OpenAPI documentation, and Pydantic integration",
+      "type": "parent",
+      "parent_id": null,
+      "children": [
+        {
+          "id": "REQ_000.1",
+          "description": "Configure pytest and pytest-asyncio for async endpoint testing with proper test isolation and async mode settings",
+          "type": "sub_process",
+          "parent_id": "REQ_000",
+          "children": [],
+          "acceptance_criteria": [
+            "pyproject.toml includes [tool.pytest.ini_options] section with asyncio_mode = 'auto'",
+            "pytest-asyncio>=0.23.0 is listed in requirements.txt",
+            "All test files can use @pytest.mark.asyncio decorator without additional configuration",
+            "Tests using 'async def' are automatically detected and run as async tests",
+            "testpaths = ['tests'] is configured in pyproject.toml",
+            "Running 'pytest backend/tests/ -v' executes all async tests successfully",
+            "Tests do not require explicit event loop management or pytest.fixture(scope='session') for event loops",
+            "conftest.py is created in backend/tests/ directory for shared fixtures"
+          ],
+          "implementation": {
+            "frontend": [],
+            "backend": [
+              "Create pyproject.toml with [tool.pytest.ini_options] section specifying asyncio_mode = 'auto' and testpaths = ['tests']",
+              "Add pytest>=7.4.0 and pytest-asyncio>=0.23.0 to requirements.txt",
+              "Create backend/tests/__init__.py to make tests a proper Python package",
+              "Create backend/tests/conftest.py for shared pytest fixtures",
+              "Verify all tests can import from backend.app module",
+              "Ensure test discovery works with 'pytest --collect-only backend/tests/'"
+            ],
+            "middleware": [],
+            "shared": [
+              "Define project metadata in pyproject.toml (name, version, requires-python>=3.11)",
+              "Establish test naming convention: test_*.py files with test_* functions"
+            ]
+          },
+          "testable_properties": [],
+          "function_id": "TestConfig.configurePytestAsyncio",
+          "related_concepts": [
+            "pytest",
+            "pytest-asyncio",
+            "async testing",
+            "test configuration",
+            "pyproject.toml",
+            "conftest.py"
+          ],
+          "category": "functional"
+        },
+        {
+          "id": "REQ_000.2",
+          "description": "Implement in-memory dictionary stores for file metadata and conversation data with proper typing and test isolation fixtures",
+          "type": "sub_process",
+          "parent_id": "REQ_000",
+          "children": [],
+          "acceptance_criteria": [
+            "file_store is defined as dict[str, FileMetadata] at module level in app.py",
+            "conversation_store is defined as dict[str, Conversation] at module level in app.py",
+            "conftest.py contains autouse fixture that clears both stores before AND after each test",
+            "FileMetadata Pydantic model includes id, filename, content_type, size fields",
+            "Conversation Pydantic model includes id, title, created_at, updated_at, messages fields",
+            "Message Pydantic model includes id, role, content, created_at, attachments fields",
+            "Stores are importable from backend.app in test files",
+            "Each test runs in isolation with empty stores regardless of test execution order",
+            "Test using 'from backend.app import file_store, conversation_store' can manipulate stores directly"
+          ],
+          "implementation": {
+            "frontend": [],
+            "backend": [
+              "Define FileMetadata(BaseModel) with id: str, filename: str, content_type: str, size: int",
+              "Define Message(BaseModel) with id: str, role: str, content: str, created_at: datetime, attachments: list[str] = []",
+              "Define Conversation(BaseModel) with id: str, title: str, created_at: datetime, updated_at: Optional[datetime] = None, messages: list[Message] = []",
+              "Initialize file_store: dict[str, FileMetadata] = {} at module level",
+              "Initialize conversation_store: dict[str, Conversation] = {} at module level",
+              "Create clear_stores() fixture in conftest.py that clears both stores before yield and after yield",
+              "Mark clear_stores fixture with @pytest.fixture(autouse=True) for automatic execution"
+            ],
+            "middleware": [],
+            "shared": [
+              "Export store dictionaries for test access: __all__ = ['app', 'file_store', 'conversation_store']",
+              "Use Python typing for proper type hints on store dictionaries"
+            ]
+          },
+          "testable_properties": [],
+          "function_id": "DataStore.implementInMemoryStores",
+          "related_concepts": [
+            "in-memory storage",
+            "dict stores",
+            "test isolation",
+            "file_store",
+            "conversation_store",
+            "autouse fixture"
+          ],
+          "category": "functional"
+        },
+        {
+          "id": "REQ_000.3",
+          "description": "Plan PostgreSQL migration path for production scalability including ORM selection, schema design, and migration strategy",
+          "type": "sub_process",
+          "parent_id": "REQ_000",
+          "children": [],
+          "acceptance_criteria": [
+            "Decision documented: Use SQLAlchemy as ORM for async PostgreSQL support",
+            "SQLAlchemy model schemas mirror existing Pydantic models (FileMetadata, Conversation, Message)",
+            "Migration tool selected: Alembic for database version control",
+            "Repository pattern interface defined for abstracting storage operations",
+            "Development uses SQLite for local testing, PostgreSQL for production",
+            "DATABASE_URL environment variable pattern established for connection string management",
+            "Schema includes proper indexes for query performance (e.g., conversation_id on messages)",
+            "Migration scripts can be generated from model changes with 'alembic revision --autogenerate'",
+            "Rollback strategy documented for each migration step",
+            "Connection pooling configuration planned for production (asyncpg with pool_size settings)"
+          ],
+          "implementation": {
+            "frontend": [],
+            "backend": [
+              "Add SQLAlchemy[asyncio]>=2.0.0 and asyncpg>=0.29.0 to requirements.txt for future use",
+              "Define abstract repository interface: FileRepository with methods save(file), get(id), delete(id)",
+              "Define abstract repository interface: ConversationRepository with methods create(), get(), list(), update(), delete()",
+              "Create InMemoryFileRepository and InMemoryConversationRepository implementing interfaces",
+              "Plan SQLAlchemyFileRepository and SQLAlchemyConversationRepository for production",
+              "Design SQLAlchemy models: File(id, filename, content_type, size, path, created_at)",
+              "Design SQLAlchemy models: Conversation(id, title, created_at, updated_at), Message(id, conversation_id, role, content, created_at)",
+              "Document Alembic setup steps: alembic init, env.py configuration for async, migrations directory"
+            ],
+            "middleware": [
+              "Plan database session middleware for request-scoped sessions",
+              "Plan dependency injection pattern for swapping repositories between dev/prod"
+            ],
+            "shared": [
+              "Define pydantic-settings BaseSettings class with DATABASE_URL field",
+              "Document environment configuration: SQLITE for dev (sqlite+aiosqlite:///./dev.db), PostgreSQL for prod",
+              "Define migration phases: Phase 1 (schema creation), Phase 2 (data migration from files), Phase 3 (cleanup)"
+            ]
+          },
+          "testable_properties": [],
+          "function_id": "DatabaseMigration.planPostgresqlPath",
+          "related_concepts": [
+            "PostgreSQL",
+            "SQLAlchemy",
+            "database migration",
+            "alembic",
+            "repository pattern",
+            "production scalability",
+            "SQLite dev database"
+          ],
+          "category": "functional"
+        },
+        {
+          "id": "REQ_000.4",
+          "description": "Set up httpx.AsyncClient for async endpoint testing with ASGITransport for direct FastAPI app testing without running a server",
+          "type": "sub_process",
+          "parent_id": "REQ_000",
+          "children": [],
+          "acceptance_criteria": [
+            "httpx>=0.26.0 is listed in requirements.txt",
+            "All test files import AsyncClient and ASGITransport from httpx",
+            "Test client is created with ASGITransport(app=app) to bypass network layer",
+            "Base URL is set to 'http://test' for all test clients",
+            "AsyncClient is used within 'async with' context manager for proper resource cleanup",
+            "Response object supports .status_code, .json(), .text, .headers properties",
+            "File uploads use files={'file': (filename, io.BytesIO(content), content_type)} format",
+            "JSON POST requests use json={} parameter instead of data={}",
+            "Tests can make multiple requests within same client context",
+            "Running 'pytest backend/tests/test_health.py -v' passes with httpx client setup"
+          ],
+          "implementation": {
+            "frontend": [],
+            "backend": [
+              "Add httpx>=0.26.0 to requirements.txt",
+              "Import pattern in test files: 'from httpx import AsyncClient, ASGITransport'",
+              "Import app in test files: 'from backend.app import app'",
+              "Create test client pattern: async with AsyncClient(transport=ASGITransport(app=app), base_url='http://test') as client:",
+              "For GET requests: response = await client.get('/endpoint')",
+              "For POST JSON: response = await client.post('/endpoint', json={'key': 'value'})",
+              "For POST files: response = await client.post('/endpoint', files={'file': ('name.txt', io.BytesIO(b'content'), 'text/plain')})",
+              "For PUT requests: response = await client.put('/endpoint', json={'key': 'value'})",
+              "For DELETE requests: response = await client.delete('/endpoint')"
+            ],
+            "middleware": [],
+            "shared": [
+              "Document assertion patterns: assert response.status_code == 200, assert response.json() == expected",
+              "Consider creating a test utility fixture for common client setup if tests become repetitive",
+              "Import io module for BytesIO when testing file uploads"
+            ]
+          },
+          "testable_properties": [],
+          "function_id": "TestClient.setupHttpxAsyncClient",
+          "related_concepts": [
+            "httpx",
+            "AsyncClient",
+            "ASGITransport",
+            "FastAPI testing",
+            "test client pattern",
+            "async context manager"
+          ],
+          "category": "functional"
+        }
+      ],
+      "acceptance_criteria": [],
+      "implementation": null,
+      "testable_properties": [],
+      "function_id": null,
+      "related_concepts": [],
+      "category": "functional"
+    },
+    {
+      "id": "REQ_001",
+      "description": "The system must provide complete file upload and attachment handling capabilities with proper validation and metadata storage",
+      "type": "parent",
+      "parent_id": null,
+      "children": [
+        {
+          "id": "REQ_001.1",
+          "description": "Implement POST /api/files/upload endpoint that accepts multipart file uploads, validates the file, stores it to the uploads directory, and returns file metadata with a unique identifier",
+          "type": "sub_process",
+          "parent_id": "REQ_001",
+          "children": [],
+          "acceptance_criteria": [
+            "Endpoint accepts multipart/form-data POST requests with a file field",
+            "Generates a unique UUID for each uploaded file",
+            "Extracts and validates content_type from the uploaded file",
+            "Calculates and stores the file size in bytes",
+            "Preserves the original filename in metadata",
+            "Stores the file to ./uploads directory with UUID-based naming to prevent collisions",
+            "Returns HTTP 201 with FileMetadata JSON containing id, filename, content_type, and size",
+            "Returns appropriate error responses for validation failures",
+            "Handles concurrent uploads without race conditions",
+            "Creates uploads directory if it does not exist"
+          ],
+          "implementation": {
+            "frontend": [
+              "File input component with drag-and-drop support",
+              "Upload progress indicator",
+              "File type restriction hints for users",
+              "Error message display for failed uploads"
+            ],
+            "backend": [
+              "POST /api/files/upload endpoint in app.py",
+              "UploadFile parameter from FastAPI for file handling",
+              "uuid4() generation for unique file IDs",
+              "aiofiles or sync file write to ./uploads/{uuid}_{filename}",
+              "file_store dictionary to persist FileMetadata objects",
+              "Response model using FileMetadata Pydantic model"
+            ],
+            "middleware": [
+              "Content-Length header validation if needed",
+              "Request size limits to prevent oversized uploads"
+            ],
+            "shared": [
+              "FileMetadata Pydantic model with id: str, filename: str, content_type: str, size: int fields",
+              "file_store: Dict[str, FileMetadata] in-memory storage",
+              "UPLOAD_DIR constant for uploads directory path"
+            ]
+          },
+          "testable_properties": [],
+          "function_id": "FileRouter.uploadFile",
+          "related_concepts": [
+            "multipart form data",
+            "file validation",
+            "UUID generation",
+            "async file I/O",
+            "content type detection"
+          ],
+          "category": "functional"
+        },
+        {
+          "id": "REQ_001.2",
+          "description": "Implement GET /api/files/{id} endpoint that retrieves file metadata by ID from the in-memory store and returns it as JSON",
+          "type": "sub_process",
+          "parent_id": "REQ_001",
+          "children": [],
+          "acceptance_criteria": [
+            "Endpoint accepts GET requests with file ID as path parameter",
+            "Returns HTTP 200 with FileMetadata JSON when file exists",
+            "Returns HTTP 404 with detail 'Resource not found' when file ID does not exist",
+            "File ID is validated as a proper format (UUID string)",
+            "Response includes all metadata fields: id, filename, content_type, size",
+            "Endpoint is idempotent - multiple calls return same result",
+            "Test coverage includes both found and not-found scenarios"
+          ],
+          "implementation": {
+            "frontend": [
+              "File metadata display component",
+              "Loading state while fetching metadata",
+              "Error handling for 404 responses",
+              "Link or reference to download the actual file if needed"
+            ],
+            "backend": [
+              "GET /api/files/{file_id} endpoint in app.py",
+              "Path parameter extraction with type annotation",
+              "Lookup in file_store dictionary by ID",
+              "HTTPException(status_code=404, detail='Resource not found') for missing files",
+              "Return FileMetadata model directly for automatic JSON serialization"
+            ],
+            "middleware": [],
+            "shared": [
+              "FileMetadata Pydantic model (shared with upload endpoint)",
+              "file_store dictionary reference"
+            ]
+          },
+          "testable_properties": [],
+          "function_id": "FileRouter.getFileMetadata",
+          "related_concepts": [
+            "path parameters",
+            "resource lookup",
+            "404 handling",
+            "REST resource retrieval"
+          ],
+          "category": "functional"
+        },
+        {
+          "id": "REQ_001.3",
+          "description": "Define and store FileMetadata Pydantic model with all required fields and implement the in-memory storage mechanism for persisting file information",
+          "type": "sub_process",
+          "parent_id": "REQ_001",
+          "children": [],
+          "acceptance_criteria": [
+            "FileMetadata model includes 'id' field as string (UUID format)",
+            "FileMetadata model includes 'filename' field as string",
+            "FileMetadata model includes 'content_type' field as string",
+            "FileMetadata model includes 'size' field as integer (bytes)",
+            "Model validates that size is non-negative",
+            "Model serializes correctly to JSON for API responses",
+            "file_store is a module-level dictionary accessible by all endpoints",
+            "Store is clearable for test isolation via conftest.py fixture",
+            "Model can be instantiated from uploaded file data"
+          ],
+          "implementation": {
+            "frontend": [
+              "TypeScript interface matching FileMetadata for type safety",
+              "Display formatting for file size (bytes to KB/MB)"
+            ],
+            "backend": [
+              "FileMetadata class inheriting from pydantic.BaseModel",
+              "Field definitions with appropriate types and constraints",
+              "file_store: Dict[str, FileMetadata] = {} at module level",
+              "Optional: created_at timestamp field for future use"
+            ],
+            "middleware": [],
+            "shared": [
+              "FileMetadata model definition in app.py or separate models.py",
+              "file_store dictionary exported for test access",
+              "Type alias for store: FileStore = Dict[str, FileMetadata]"
+            ]
+          },
+          "testable_properties": [],
+          "function_id": "FileMetadataModel.define",
+          "related_concepts": [
+            "Pydantic models",
+            "data validation",
+            "in-memory storage",
+            "type annotations",
+            "JSON serialization"
+          ],
+          "category": "functional"
+        },
+        {
+          "id": "REQ_001.4",
+          "description": "Implement validation logic that detects empty file uploads (zero bytes) and returns HTTP 400 error with specific error message",
+          "type": "sub_process",
+          "parent_id": "REQ_001",
+          "children": [],
+          "acceptance_criteria": [
+            "Files with size of 0 bytes are rejected",
+            "Returns HTTP 400 status code for empty files",
+            "Response body contains detail field with exact message 'Empty file not allowed'",
+            "Validation occurs before file is saved to disk",
+            "Validation occurs before metadata is stored",
+            "Test exists that uploads empty file and verifies 400 response",
+            "Test verifies exact error message in response",
+            "File read is performed to determine actual content size, not just Content-Length header"
+          ],
+          "implementation": {
+            "frontend": [
+              "Client-side file size check before upload attempt",
+              "User-friendly error message display for empty files",
+              "Disable upload button if selected file is empty"
+            ],
+            "backend": [
+              "Read uploaded file content to check actual size",
+              "await file.read() to get file bytes",
+              "len(content) == 0 check",
+              "HTTPException(status_code=400, detail='Empty file not allowed')",
+              "Validation placed at start of upload endpoint handler",
+              "Seek file back to start if reading for validation (file.seek(0))"
+            ],
+            "middleware": [],
+            "shared": [
+              "Error message constant: EMPTY_FILE_ERROR = 'Empty file not allowed'",
+              "Validation utility function if reused elsewhere"
+            ]
+          },
+          "testable_properties": [],
+          "function_id": "FileValidation.rejectEmptyFile",
+          "related_concepts": [
+            "input validation",
+            "error handling",
+            "HTTP 400 Bad Request",
+            "file size validation",
+            "early return pattern"
+          ],
+          "category": "functional"
+        },
+        {
+          "id": "REQ_001.5",
+          "description": "Implement content type validation that checks uploaded files against allowed MIME types and returns HTTP 400 error for unsupported types",
+          "type": "sub_process",
+          "parent_id": "REQ_001",
+          "children": [],
+          "acceptance_criteria": [
+            "Maintains a list of allowed content types for the application",
+            "Validates file content_type against allowed list",
+            "Returns HTTP 400 for files with unsupported content types",
+            "Error message includes 'Invalid content type' text",
+            "Error message specifies what content types are allowed (helpful for users)",
+            "Audio content types (audio/webm, audio/mpeg, audio/mp3, audio/wav, audio/ogg, audio/flac) are allowed for transcription feature",
+            "Common document types are allowed based on application needs",
+            "Test exists for valid content type acceptance",
+            "Test exists for invalid content type rejection with correct error message",
+            "Content type is checked from file metadata, not file extension"
+          ],
+          "implementation": {
+            "frontend": [
+              "Accept attribute on file input to filter file picker",
+              "Content type validation before upload",
+              "Clear error message showing allowed file types",
+              "File type icon display based on content type"
+            ],
+            "backend": [
+              "ALLOWED_CONTENT_TYPES list constant",
+              "AUDIO_CONTENT_TYPES subset for transcription endpoint",
+              "file.content_type check against allowed list",
+              "HTTPException(status_code=400, detail='Invalid content type. Allowed types: ...')",
+              "Validation after empty file check, before storage",
+              "Consider using python-magic for content type verification from file bytes"
+            ],
+            "middleware": [],
+            "shared": [
+              "ALLOWED_CONTENT_TYPES constant list",
+              "AUDIO_CONTENT_TYPES constant list for transcription",
+              "validate_content_type() utility function",
+              "Error message template for invalid content type"
+            ]
+          },
+          "testable_properties": [],
+          "function_id": "FileValidation.rejectInvalidContentType",
+          "related_concepts": [
+            "MIME types",
+            "content type validation",
+            "whitelist validation",
+            "HTTP 400 Bad Request",
+            "file type security"
+          ],
+          "category": "functional"
+        }
+      ],
+      "acceptance_criteria": [],
+      "implementation": null,
+      "testable_properties": [],
+      "function_id": null,
+      "related_concepts": [],
+      "category": "functional"
+    },
+    {
+      "id": "REQ_002",
+      "description": "The system must provide full CRUD operations for conversation management with message and attachment support",
+      "type": "parent",
+      "parent_id": null,
+      "children": [
+        {
+          "id": "REQ_002.1",
+          "description": "Implement GET /api/conversations endpoint to list all conversations with pagination support, and POST /api/conversations endpoint to create new conversations with initial title and optional first message",
+          "type": "sub_process",
+          "parent_id": "REQ_002",
+          "children": [],
+          "acceptance_criteria": [
+            "GET /api/conversations returns HTTP 200 with JSON array of all conversations",
+            "GET /api/conversations returns empty array [] when no conversations exist",
+            "Each conversation in list includes id, title, created_at, updated_at, and message_count fields",
+            "POST /api/conversations accepts JSON body with required 'title' field",
+            "POST /api/conversations returns HTTP 201 with created conversation including generated UUID",
+            "POST /api/conversations automatically sets created_at and updated_at to current timestamp",
+            "POST /api/conversations with missing title returns HTTP 422 validation error",
+            "POST /api/conversations with empty string title returns HTTP 400 with 'Title cannot be empty'",
+            "POST /api/conversations initializes messages array as empty list",
+            "All endpoints are async and use AsyncClient for testing",
+            "Response Content-Type is application/json"
+          ],
+          "implementation": {
+            "frontend": [
+              "Conversation list component displaying all conversations",
+              "Create conversation form with title input",
+              "Loading state while fetching conversations",
+              "Empty state when no conversations exist",
+              "Success/error toast notifications for creation"
+            ],
+            "backend": [
+              "GET /api/conversations endpoint returning List[ConversationSummary]",
+              "POST /api/conversations endpoint accepting ConversationCreate schema",
+              "conversation_store in-memory dict with UUID keys",
+              "UUID generation for new conversation IDs",
+              "Timestamp generation using datetime.utcnow()"
+            ],
+            "middleware": [
+              "Request body validation via Pydantic",
+              "JSON content-type enforcement"
+            ],
+            "shared": [
+              "ConversationCreate Pydantic model with title: str",
+              "ConversationSummary Pydantic model for list responses",
+              "Conversation Pydantic model with full fields",
+              "UUID type for conversation IDs"
+            ]
+          },
+          "testable_properties": [],
+          "function_id": "ConversationRouter.listAndCreateConversations",
+          "related_concepts": [
+            "REST API design",
+            "pagination",
+            "async request handling",
+            "Pydantic validation",
+            "in-memory data store"
+          ],
+          "category": "functional"
+        },
+        {
+          "id": "REQ_002.2",
+          "description": "Implement GET /api/conversations/{id} to retrieve a single conversation with all messages, PUT /api/conversations/{id} to update conversation title, and DELETE /api/conversations/{id} to remove a conversation and all associated data",
+          "type": "sub_process",
+          "parent_id": "REQ_002",
+          "children": [],
+          "acceptance_criteria": [
+            "GET /api/conversations/{id} returns HTTP 200 with full conversation including messages array",
+            "GET /api/conversations/{id} for non-existent ID returns HTTP 404 with detail 'Resource not found'",
+            "PUT /api/conversations/{id} accepts JSON body with optional 'title' field",
+            "PUT /api/conversations/{id} returns HTTP 200 with updated conversation",
+            "PUT /api/conversations/{id} automatically updates the updated_at timestamp",
+            "PUT /api/conversations/{id} for non-existent ID returns HTTP 404 with detail 'Resource not found'",
+            "PUT /api/conversations/{id} with empty title returns HTTP 400 with 'Title cannot be empty'",
+            "DELETE /api/conversations/{id} returns HTTP 204 with no content on success",
+            "DELETE /api/conversations/{id} removes conversation from conversation_store",
+            "DELETE /api/conversations/{id} for non-existent ID returns HTTP 404 with detail 'Resource not found'",
+            "All operations use consistent UUID format validation for {id} parameter",
+            "Invalid UUID format in path returns HTTP 422 validation error"
+          ],
+          "implementation": {
+            "frontend": [
+              "Conversation detail view showing title and all messages",
+              "Edit conversation title inline or modal form",
+              "Delete conversation button with confirmation dialog",
+              "Loading state while fetching single conversation",
+              "Redirect to list after successful deletion",
+              "Optimistic UI update on edit with rollback on failure"
+            ],
+            "backend": [
+              "GET /api/conversations/{id} endpoint with Path parameter",
+              "PUT /api/conversations/{id} endpoint accepting ConversationUpdate schema",
+              "DELETE /api/conversations/{id} endpoint returning 204 No Content",
+              "Lookup logic in conversation_store by UUID key",
+              "Update timestamp logic for PUT operations"
+            ],
+            "middleware": [
+              "UUID path parameter validation",
+              "404 exception handler for missing resources"
+            ],
+            "shared": [
+              "ConversationUpdate Pydantic model with optional title: str",
+              "HTTPException with status_code=404 for not found",
+              "Consistent error response format with 'detail' field"
+            ]
+          },
+          "testable_properties": [],
+          "function_id": "ConversationRouter.singleConversationOperations",
+          "related_concepts": [
+            "RESTful resource operations",
+            "path parameters",
+            "HTTP status codes",
+            "cascade deletion",
+            "optimistic locking"
+          ],
+          "category": "functional"
+        },
+        {
+          "id": "REQ_002.3",
+          "description": "Define and implement the Conversation data model with id, title, created_at, updated_at fields and a messages array that supports the full conversation lifecycle including serialization for API responses",
+          "type": "sub_process",
+          "parent_id": "REQ_002",
+          "children": [],
+          "acceptance_criteria": [
+            "Conversation model has 'id' field of type UUID, auto-generated on creation",
+            "Conversation model has 'title' field of type str, required and non-empty",
+            "Conversation model has 'created_at' field of type datetime, auto-set on creation",
+            "Conversation model has 'updated_at' field of type datetime, auto-updated on any modification",
+            "Conversation model has 'messages' field as List[Message], defaults to empty list",
+            "Conversation model serializes to JSON with ISO 8601 formatted timestamps",
+            "Conversation model validates that title is not empty string",
+            "Model supports adding messages to existing conversation",
+            "Model supports removing messages from conversation",
+            "In-memory conversation_store uses dict[str, Conversation] structure",
+            "conversation_store is cleared between tests via conftest.py fixture",
+            "Model can be instantiated from dict/JSON for deserialization"
+          ],
+          "implementation": {
+            "frontend": [
+              "TypeScript interface matching Conversation model",
+              "Date formatting utilities for displaying timestamps",
+              "Form validation matching backend title requirements"
+            ],
+            "backend": [
+              "Conversation Pydantic BaseModel class definition",
+              "Field validators for title non-empty constraint",
+              "Default factory for messages list",
+              "Default factory for UUID generation",
+              "Default factory for timestamp generation",
+              "conversation_store module-level dict variable",
+              "JSON serialization config for datetime fields"
+            ],
+            "middleware": [
+              "Pydantic model validation on request parsing"
+            ],
+            "shared": [
+              "Conversation model in shared models module",
+              "UUID type alias or import",
+              "datetime import from standard library",
+              "List type import from typing"
+            ]
+          },
+          "testable_properties": [],
+          "function_id": "ConversationModel.dataStructure",
+          "related_concepts": [
+            "Pydantic models",
+            "data serialization",
+            "ISO 8601 timestamps",
+            "nested models",
+            "model validation"
+          ],
+          "category": "functional"
+        },
+        {
+          "id": "REQ_002.4",
+          "description": "Define and implement the Message data model with id, role, content, created_at fields and attachments array to support conversation messages with file references and role-based content organization",
+          "type": "sub_process",
+          "parent_id": "REQ_002",
+          "children": [],
+          "acceptance_criteria": [
+            "Message model has 'id' field of type UUID, auto-generated on creation",
+            "Message model has 'role' field as enum with values: 'user', 'assistant', 'system'",
+            "Message model has 'content' field of type str, required",
+            "Message model has 'created_at' field of type datetime, auto-set on creation",
+            "Message model has 'attachments' field as List[str] for file IDs, defaults to empty list",
+            "Message model validates role is one of the allowed enum values",
+            "Message model allows empty content string for attachment-only messages",
+            "Message model serializes attachments as array of file ID strings",
+            "Messages are stored within parent Conversation's messages array",
+            "Message ordering is preserved in insertion order within conversation",
+            "Message model can reference FileMetadata IDs in attachments array",
+            "Model supports JSON serialization with proper datetime formatting"
+          ],
+          "implementation": {
+            "frontend": [
+              "TypeScript interface matching Message model",
+              "Message role enum/type definition",
+              "Message bubble component with role-based styling",
+              "Attachment preview/link within message display",
+              "Message input form with attachment upload support"
+            ],
+            "backend": [
+              "Message Pydantic BaseModel class definition",
+              "MessageRole enum class with user/assistant/system values",
+              "Field definition for attachments with default empty list",
+              "Default factory for UUID and timestamp generation",
+              "Nested Message model within Conversation.messages"
+            ],
+            "middleware": [
+              "Enum validation for role field",
+              "Attachment ID format validation"
+            ],
+            "shared": [
+              "Message model in shared models module",
+              "MessageRole enum in shared enums",
+              "Attachment reference type definition",
+              "List[str] type for attachment IDs"
+            ]
+          },
+          "testable_properties": [],
+          "function_id": "MessageModel.dataStructure",
+          "related_concepts": [
+            "nested Pydantic models",
+            "enum types for roles",
+            "file attachment references",
+            "message threading",
+            "content validation"
+          ],
+          "category": "functional"
+        },
+        {
+          "id": "REQ_002.5",
+          "description": "Implement consistent HTTP 404 error handling for all conversation endpoints when requested conversation ID does not exist in the data store, with standardized error response format",
+          "type": "sub_process",
+          "parent_id": "REQ_002",
+          "children": [],
+          "acceptance_criteria": [
+            "GET /api/conversations/{id} returns HTTP 404 when conversation not in store",
+            "PUT /api/conversations/{id} returns HTTP 404 when conversation not in store",
+            "DELETE /api/conversations/{id} returns HTTP 404 when conversation not in store",
+            "All 404 responses have Content-Type: application/json",
+            "All 404 responses include JSON body with 'detail' field",
+            "Error detail message is exactly 'Resource not found' for consistency",
+            "404 is raised before any update/delete logic executes",
+            "Error response does not leak internal implementation details",
+            "Tests verify 404 behavior for each endpoint independently",
+            "UUID format errors return 422, not 404 (distinct error cases)",
+            "Helper function get_conversation_or_404(id) abstracts lookup logic",
+            "Error handling works with async endpoint functions"
+          ],
+          "implementation": {
+            "frontend": [
+              "404 error page or redirect for missing conversations",
+              "Error toast notification for failed operations",
+              "Graceful handling of deleted conversation during viewing",
+              "Error boundary component for conversation routes"
+            ],
+            "backend": [
+              "HTTPException(status_code=404, detail='Resource not found') pattern",
+              "get_conversation_or_404 helper function",
+              "Consistent exception raising across all {id} endpoints",
+              "Exception raised before any data modification"
+            ],
+            "middleware": [
+              "Global exception handler for HTTPException",
+              "Error response serialization to JSON"
+            ],
+            "shared": [
+              "ErrorResponse Pydantic model with detail: str field",
+              "HTTP status code constants",
+              "Standard error detail messages as constants"
+            ]
+          },
+          "testable_properties": [],
+          "function_id": "ConversationRouter.notFoundHandling",
+          "related_concepts": [
+            "HTTP error handling",
+            "exception handlers",
+            "error response schema",
+            "FastAPI HTTPException",
+            "consistent API errors"
+          ],
+          "category": "functional"
+        }
+      ],
+      "acceptance_criteria": [],
+      "implementation": null,
+      "testable_properties": [],
+      "function_id": null,
+      "related_concepts": [],
+      "category": "functional"
+    },
+    {
+      "id": "REQ_003",
+      "description": "The system must provide audio transcription capabilities via OpenAI Whisper API with proper content type validation",
+      "type": "parent",
+      "parent_id": null,
+      "children": [
+        {
+          "id": "REQ_003.1",
+          "description": "Implement POST /api/transcribe endpoint that accepts audio file uploads and returns transcribed text using OpenAI Whisper API",
+          "type": "sub_process",
+          "parent_id": "REQ_003",
+          "children": [],
+          "acceptance_criteria": [
+            "Endpoint accepts POST requests at /api/transcribe with multipart/form-data containing audio file",
+            "Request must include 'file' field containing the audio binary data",
+            "Successful transcription returns HTTP 200 with JSON body containing 'text' field with transcribed content",
+            "Response includes transcription metadata: duration, language detected (if available)",
+            "Endpoint is async and non-blocking during OpenAI API call",
+            "Audio file is temporarily stored during processing and cleaned up after completion",
+            "Maximum file size limit enforced (configurable, default 25MB per Whisper API limit)",
+            "Endpoint documented in OpenAPI schema with request/response examples",
+            "Test verifies successful transcription returns expected text content",
+            "Test verifies response time is within acceptable bounds for typical audio files"
+          ],
+          "implementation": {
+            "frontend": [
+              "Audio file upload component with drag-and-drop support",
+              "Recording interface for capturing audio directly in browser",
+              "Progress indicator showing upload and transcription status",
+              "Display transcribed text with copy-to-clipboard functionality"
+            ],
+            "backend": [
+              "POST /api/transcribe endpoint handler in app.py",
+              "transcribe_audio() async function that calls OpenAI Whisper API",
+              "File handling logic to save uploaded audio temporarily",
+              "OpenAI client initialization with API key from environment",
+              "Response model: TranscriptionResponse(text: str, duration: Optional[float], language: Optional[str])"
+            ],
+            "middleware": [
+              "File size validation middleware (reject files > 25MB)",
+              "Request timeout handling for long transcription jobs",
+              "Rate limiting to prevent abuse of expensive API calls"
+            ],
+            "shared": [
+              "TranscriptionResponse Pydantic model",
+              "TranscriptionRequest model for API documentation",
+              "Configuration constants for max file size, timeout values",
+              "Temporary file path utilities"
+            ]
+          },
+          "testable_properties": [],
+          "function_id": "TranscriptionRouter.transcribe_audio",
+          "related_concepts": [
+            "file upload handling",
+            "multipart form data",
+            "async HTTP client",
+            "OpenAI Whisper API",
+            "audio processing"
+          ],
+          "category": "functional"
+        },
+        {
+          "id": "REQ_003.2",
+          "description": "Validate that uploaded files have acceptable audio content types before processing, rejecting invalid formats with clear error messages",
+          "type": "sub_process",
+          "parent_id": "REQ_003",
+          "children": [],
+          "acceptance_criteria": [
+            "Accept only these content types: audio/webm, audio/mpeg, audio/mp3, audio/wav, audio/ogg, audio/flac",
+            "Return HTTP 400 with detail 'Invalid content type: {received_type}. Allowed types: audio/webm, audio/mpeg, audio/mp3, audio/wav, audio/ogg, audio/flac' for invalid types",
+            "Validation occurs before any processing or API calls to fail fast",
+            "Content-Type header is checked from the uploaded file's metadata",
+            "Empty content type treated as invalid and rejected",
+            "Test case for each valid content type confirms acceptance",
+            "Test case for invalid types (e.g., text/plain, image/png, video/mp4) confirms rejection",
+            "Test case for missing content type confirms rejection with appropriate error",
+            "Validation is case-insensitive for content type matching",
+            "AUDIO_CONTENT_TYPES constant is defined and exported for reuse"
+          ],
+          "implementation": {
+            "frontend": [
+              "Client-side file type validation before upload attempt",
+              "File picker input restricted to accept='audio/*' with specific extensions",
+              "User-friendly error message displayed when invalid file type selected",
+              "Supported formats list displayed in upload UI"
+            ],
+            "backend": [
+              "AUDIO_CONTENT_TYPES list constant in app.py or constants module",
+              "validate_audio_content_type() function that raises HTTPException on invalid type",
+              "Integration of validation at start of /api/transcribe endpoint handler",
+              "Structured error response with allowed types list for client guidance"
+            ],
+            "middleware": [
+              "Content-Type extraction from UploadFile object",
+              "Optional: magic byte validation for additional security (verify file header matches claimed type)"
+            ],
+            "shared": [
+              "AUDIO_CONTENT_TYPES constant: List[str] = ['audio/webm', 'audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/ogg', 'audio/flac']",
+              "ContentTypeError custom exception class",
+              "Error response model for validation failures"
+            ]
+          },
+          "testable_properties": [],
+          "function_id": "TranscriptionValidator.validate_audio_content_type",
+          "related_concepts": [
+            "MIME type validation",
+            "content-type header",
+            "file type detection",
+            "input validation",
+            "security"
+          ],
+          "category": "functional"
+        },
+        {
+          "id": "REQ_003.3",
+          "description": "Create testable architecture using unittest.mock.patch with AsyncMock to simulate OpenAI API responses for isolated unit testing without external dependencies",
+          "type": "sub_process",
+          "parent_id": "REQ_003",
+          "children": [],
+          "acceptance_criteria": [
+            "All transcription tests use mocked OpenAI client - no real API calls in test suite",
+            "Mock is applied using 'with patch(\"backend.app.transcribe_audio\", mock_transcription)' pattern",
+            "AsyncMock used for async transcription function: AsyncMock(return_value={'text': 'expected text'})",
+            "Mock can be configured to return different responses for different test scenarios",
+            "Mock call arguments can be inspected to verify correct parameters passed to API",
+            "Mock can be configured to raise exceptions for error scenario testing",
+            "Tests verify mock was called exactly once per transcription request",
+            "Tests verify correct audio data was passed to the mocked function",
+            "Pytest fixture available in conftest.py for common mock configurations",
+            "Mock includes realistic response structure matching actual Whisper API response"
+          ],
+          "implementation": {
+            "frontend": [],
+            "backend": [
+              "transcribe_audio() function extracted as separate async function for mockability",
+              "Function signature: async def transcribe_audio(audio_file: bytes, content_type: str) -> dict",
+              "OpenAI client instantiation separated from transcription logic",
+              "Test file: tests/test_transcription.py with comprehensive mock scenarios"
+            ],
+            "middleware": [],
+            "shared": [
+              "Mock response fixtures: MOCK_TRANSCRIPTION_SUCCESS = {'text': 'Hello, this is a test.'}",
+              "Mock configuration helpers in tests/conftest.py",
+              "from unittest.mock import patch, AsyncMock import statement",
+              "Reusable mock factory function for generating test responses"
+            ]
+          },
+          "testable_properties": [],
+          "function_id": "TranscriptionService.mock_openai_transcription",
+          "related_concepts": [
+            "unit testing",
+            "mocking",
+            "dependency injection",
+            "test isolation",
+            "AsyncMock",
+            "pytest fixtures"
+          ],
+          "category": "functional"
+        },
+        {
+          "id": "REQ_003.4",
+          "description": "Implement robust error handling for OpenAI API failures, returning standardized HTTP 500 responses with descriptive error messages while logging details for debugging",
+          "type": "sub_process",
+          "parent_id": "REQ_003",
+          "children": [],
+          "acceptance_criteria": [
+            "OpenAI API failures caught and converted to HTTP 500 response",
+            "Error response body format: {'detail': 'Service failed: {original_error_message}'}",
+            "Original exception message included in response for debugging context",
+            "Sensitive information (API keys, internal paths) NOT exposed in error response",
+            "All OpenAI exceptions caught: APIError, RateLimitError, APIConnectionError, AuthenticationError",
+            "Test simulates API failure using mock.side_effect = Exception('API unavailable')",
+            "Test verifies HTTP 500 status code returned on API failure",
+            "Test verifies error message format matches 'Service failed: {error}' pattern",
+            "Errors logged with full stack trace for server-side debugging",
+            "Timeout errors from OpenAI handled gracefully with specific message",
+            "Network connectivity errors distinguished from API errors in logging"
+          ],
+          "implementation": {
+            "frontend": [
+              "Error state handling in transcription UI component",
+              "User-friendly error message display (e.g., 'Transcription service temporarily unavailable')",
+              "Retry button offered to user on transient failures",
+              "Error state clears when user initiates new transcription attempt"
+            ],
+            "backend": [
+              "try/except block wrapping OpenAI API call in transcribe endpoint",
+              "HTTPException(status_code=500, detail=f'Service failed: {str(e)}') for caught exceptions",
+              "Logging statement: logger.error(f'Transcription failed: {e}', exc_info=True)",
+              "Specific handling for openai.APIError, openai.RateLimitError, openai.APIConnectionError",
+              "Optional: Circuit breaker pattern for repeated failures"
+            ],
+            "middleware": [
+              "Global exception handler for uncaught OpenAI exceptions",
+              "Request ID injection for correlating errors across logs"
+            ],
+            "shared": [
+              "ServiceError custom exception class for wrapping external service failures",
+              "Error response model: ErrorResponse(detail: str)",
+              "Logging configuration for error tracking",
+              "Constants for error message templates"
+            ]
+          },
+          "testable_properties": [],
+          "function_id": "TranscriptionErrorHandler.handle_external_api_failure",
+          "related_concepts": [
+            "error handling",
+            "exception handling",
+            "HTTP status codes",
+            "external service failures",
+            "logging",
+            "retry logic"
+          ],
+          "category": "functional"
+        }
+      ],
+      "acceptance_criteria": [],
+      "implementation": null,
+      "testable_properties": [],
+      "function_id": null,
+      "related_concepts": [],
+      "category": "functional"
+    },
+    {
+      "id": "REQ_004",
+      "description": "The system must provide theme extraction and content generation capabilities via LLM integration",
+      "type": "parent",
+      "parent_id": null,
+      "children": [
+        {
+          "id": "REQ_004.1",
+          "description": "Implement POST /api/themes/extract endpoint that accepts text input and returns extracted themes with confidence scores using LLM analysis",
+          "type": "sub_process",
+          "parent_id": "REQ_004",
+          "children": [],
+          "acceptance_criteria": [
+            "Endpoint accepts JSON body with 'text' field (string, required)",
+            "Returns 422 validation error if 'text' field is missing or empty",
+            "Returns array of Theme objects, each containing 'name' (string) and 'confidence' (float 0.0-1.0)",
+            "Themes are extracted using OpenAI GPT-4 API with structured prompt",
+            "Returns empty array when no themes can be extracted from text",
+            "Returns 500 error with detail 'Service failed: {error}' when OpenAI API fails",
+            "Confidence scores reflect LLM's certainty about each theme (normalized 0-1)",
+            "Response time is reasonable (<10 seconds for typical text lengths)",
+            "Endpoint is async and non-blocking",
+            "OpenAI API calls are mocked in tests using AsyncMock pattern"
+          ],
+          "implementation": {
+            "frontend": [
+              "Text input area for user to paste/type content for theme extraction",
+              "Submit button to trigger extraction",
+              "Loading state indicator during API call",
+              "Display extracted themes as chips/tags with confidence percentages",
+              "Error handling UI for failed extraction attempts"
+            ],
+            "backend": [
+              "POST /api/themes/extract endpoint in app.py",
+              "ThemeExtractionRequest Pydantic model with 'text' field validation",
+              "ThemeExtractionResponse Pydantic model with list of Theme objects",
+              "extract_themes_from_text async function that calls OpenAI API",
+              "Structured prompt template for consistent theme extraction",
+              "JSON parsing of LLM response into Theme objects",
+              "Error handling wrapper for OpenAI API failures"
+            ],
+            "middleware": [
+              "Request body size validation (prevent extremely large text inputs)",
+              "Content-Type validation (application/json required)"
+            ],
+            "shared": [
+              "Theme Pydantic model with 'name: str' and 'confidence: float' fields",
+              "OpenAI client configuration and initialization",
+              "Constants for max text length, default confidence threshold"
+            ]
+          },
+          "testable_properties": [],
+          "function_id": "ThemeService.extractThemes",
+          "related_concepts": [
+            "natural language processing",
+            "theme detection",
+            "text analysis",
+            "OpenAI integration",
+            "confidence scoring"
+          ],
+          "category": "functional"
+        },
+        {
+          "id": "REQ_004.2",
+          "description": "Implement POST /api/generate endpoint that generates content based on provided themes and user prompt using LLM",
+          "type": "sub_process",
+          "parent_id": "REQ_004",
+          "children": [],
+          "acceptance_criteria": [
+            "Endpoint accepts JSON body with 'themes' (array of Theme objects) and 'prompt' (string) fields",
+            "Returns 422 validation error if 'prompt' field is missing or empty",
+            "Returns 422 validation error if 'themes' array is empty",
+            "Returns generated content as JSON with 'content' field (string)",
+            "Generated content incorporates all provided themes naturally",
+            "Prompt is passed to LLM along with theme context for generation",
+            "Returns 500 error with detail 'Service failed: {error}' when OpenAI API fails",
+            "Supports various content types (essays, stories, summaries) based on prompt",
+            "Response includes metadata like token count or generation time (optional)",
+            "Endpoint is async and non-blocking",
+            "OpenAI API calls are mocked in tests using AsyncMock pattern"
+          ],
+          "implementation": {
+            "frontend": [
+              "Theme selection interface (checkboxes or multi-select from extracted themes)",
+              "Prompt input textarea with placeholder examples",
+              "Content type selector (essay, story, summary, etc.) as optional enhancement",
+              "Generate button with loading state",
+              "Generated content display area with copy-to-clipboard functionality",
+              "Regenerate option to get alternative content",
+              "Error handling UI for generation failures"
+            ],
+            "backend": [
+              "POST /api/generate endpoint in app.py",
+              "GenerationRequest Pydantic model with 'themes' and 'prompt' validation",
+              "GenerationResponse Pydantic model with 'content' string field",
+              "generate_content async function that constructs prompt and calls OpenAI API",
+              "Template for combining themes into effective generation prompt",
+              "Error handling wrapper for OpenAI API failures",
+              "Response parsing to extract generated text from LLM response"
+            ],
+            "middleware": [
+              "Request body validation for themes array structure",
+              "Rate limiting consideration for expensive LLM calls (noted as open question)"
+            ],
+            "shared": [
+              "Theme Pydantic model (shared with extraction endpoint)",
+              "OpenAI client configuration (shared instance)",
+              "Constants for max prompt length, temperature settings, model selection"
+            ]
+          },
+          "testable_properties": [],
+          "function_id": "GenerationService.generateContent",
+          "related_concepts": [
+            "content generation",
+            "LLM prompting",
+            "creative writing",
+            "theme-based writing",
+            "OpenAI GPT-4"
+          ],
+          "category": "functional"
+        },
+        {
+          "id": "REQ_004.3",
+          "description": "Define and implement Theme Pydantic model with name and confidence score fields for use across theme extraction and generation endpoints",
+          "type": "sub_process",
+          "parent_id": "REQ_004",
+          "children": [],
+          "acceptance_criteria": [
+            "Theme model has 'name' field of type string (required, non-empty)",
+            "Theme model has 'confidence' field of type float (required, range 0.0 to 1.0)",
+            "Confidence field validates that value is between 0.0 and 1.0 inclusive",
+            "Model serializes to JSON correctly for API responses",
+            "Model deserializes from JSON correctly for API requests",
+            "Model provides clear validation error messages for invalid data",
+            "Model is importable from shared location for use in both endpoints",
+            "Model supports equality comparison for testing purposes",
+            "Model has sensible __repr__ for debugging"
+          ],
+          "implementation": {
+            "frontend": [
+              "TypeScript interface matching Theme model structure",
+              "Confidence display formatting (percentage or decimal)",
+              "Theme chip/badge component that renders name with confidence indicator"
+            ],
+            "backend": [
+              "Theme Pydantic BaseModel class definition",
+              "Field validators for confidence range (ge=0.0, le=1.0)",
+              "Field validators for name (min_length=1)",
+              "Example values in model schema for OpenAPI documentation",
+              "Unit tests for model validation (valid and invalid inputs)"
+            ],
+            "middleware": [],
+            "shared": [
+              "Theme model defined in models.py or within app.py initially",
+              "Export Theme model for import in test files",
+              "Type hints for Theme in function signatures"
+            ]
+          },
+          "testable_properties": [],
+          "function_id": "ThemeModel.create",
+          "related_concepts": [
+            "Pydantic models",
+            "data validation",
+            "type safety",
+            "JSON serialization",
+            "API contracts"
+          ],
+          "category": "functional"
+        },
+        {
+          "id": "REQ_004.4",
+          "description": "Integrate with OpenAI GPT-4 API for both theme extraction and content generation LLM operations with proper client configuration and error handling",
+          "type": "sub_process",
+          "parent_id": "REQ_004",
+          "children": [],
+          "acceptance_criteria": [
+            "OpenAI client is initialized with API key from environment variable",
+            "API key is not hardcoded or exposed in logs",
+            "Client supports async operations using openai>=1.0.0 SDK",
+            "GPT-4 model is used for both extraction and generation (configurable)",
+            "API calls include appropriate timeout settings",
+            "Failed API calls raise descriptive errors that map to HTTP 500 responses",
+            "Rate limit errors from OpenAI are handled gracefully",
+            "Network errors are caught and converted to service errors",
+            "Client is mockable for unit testing without real API calls",
+            "Temperature and other model parameters are configurable",
+            "Token usage is logged for cost monitoring (preparation for future tracking)"
+          ],
+          "implementation": {
+            "frontend": [
+              "Error message display for service unavailable states",
+              "Retry button when generation fails due to transient errors"
+            ],
+            "backend": [
+              "OpenAI client initialization in app.py or dedicated service module",
+              "Environment variable loading for OPENAI_API_KEY using pydantic-settings",
+              "Async wrapper function for chat completions API",
+              "Standard error handling that catches OpenAI exceptions",
+              "Logging of API calls for debugging and monitoring",
+              "Configuration class for model name, temperature, max_tokens",
+              "Helper function to construct system prompts for theme extraction",
+              "Helper function to construct user prompts for content generation"
+            ],
+            "middleware": [
+              "Environment validation on startup (fail fast if API key missing)"
+            ],
+            "shared": [
+              "OpenAI client instance (singleton pattern)",
+              "Configuration constants for model parameters",
+              "Error message templates for various failure modes",
+              "Mock fixtures in conftest.py for testing without API calls"
+            ]
+          },
+          "testable_properties": [],
+          "function_id": "OpenAIService.initialize",
+          "related_concepts": [
+            "OpenAI API",
+            "GPT-4",
+            "API client configuration",
+            "async HTTP",
+            "environment variables",
+            "dependency injection"
+          ],
+          "category": "functional"
+        }
+      ],
+      "acceptance_criteria": [],
+      "implementation": null,
+      "testable_properties": [],
+      "function_id": null,
+      "related_concepts": [],
+      "category": "functional"
+    },
+    {
+      "id": "REQ_005",
+      "description": "The system must implement proper error handling with standardized HTTP status codes and meaningful error messages",
+      "type": "parent",
+      "parent_id": null,
+      "children": [
+        {
+          "id": "REQ_005.1",
+          "description": "Return HTTP 400 for empty files and invalid content types during file upload and audio transcription operations",
+          "type": "sub_process",
+          "parent_id": "REQ_005",
+          "children": [],
+          "acceptance_criteria": [
+            "When a file with 0 bytes is uploaded to /api/files/upload, return HTTP 400 with detail 'Empty file not allowed'",
+            "When a file with 0 bytes is uploaded to /api/transcribe, return HTTP 400 with detail 'Empty file not allowed'",
+            "When an audio file with content type not in AUDIO_CONTENT_TYPES is uploaded to /api/transcribe, return HTTP 400 with detail 'Invalid content type: {content_type}. Allowed types: audio/webm, audio/mpeg, audio/mp3, audio/wav, audio/ogg, audio/flac'",
+            "When /api/themes/extract receives empty text field, return HTTP 400 with detail 'Text content cannot be empty'",
+            "When /api/generate receives empty themes array, return HTTP 400 with detail 'At least one theme is required'",
+            "All 400 responses must follow the format: {'detail': 'error message'}",
+            "Content-type validation must check against the AUDIO_CONTENT_TYPES list before processing",
+            "File size validation must occur before any file processing or storage operations"
+          ],
+          "implementation": {
+            "frontend": [
+              "Display user-friendly error messages when file upload fails with 400 status",
+              "Implement client-side file size validation before upload to prevent empty file submissions",
+              "Implement client-side content-type checking for audio files before transcription requests",
+              "Show allowed audio formats in file picker filter and error messages"
+            ],
+            "backend": [
+              "Create validation function validate_file_not_empty(file: UploadFile) that raises HTTPException(400) if file.size == 0",
+              "Create validation function validate_audio_content_type(content_type: str) that checks against AUDIO_CONTENT_TYPES list",
+              "Apply file validation in /api/files/upload endpoint before storing file",
+              "Apply audio content type validation in /api/transcribe endpoint before calling Whisper API",
+              "Create validation for /api/themes/extract to check text is not empty or whitespace-only",
+              "Create validation for /api/generate to check themes array has at least one element"
+            ],
+            "middleware": [
+              "Ensure FastAPI exception handlers properly format 400 errors with consistent JSON structure",
+              "Log all 400 errors with request details for debugging purposes"
+            ],
+            "shared": [
+              "Define AUDIO_CONTENT_TYPES constant list: ['audio/webm', 'audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/ogg', 'audio/flac']",
+              "Create ErrorResponse model with 'detail' field for consistent error formatting",
+              "Create custom exception class BadRequestError(HTTPException) with status_code=400"
+            ]
+          },
+          "testable_properties": [],
+          "function_id": "ErrorHandler.handleBadRequest",
+          "related_concepts": [
+            "content-type validation",
+            "file validation",
+            "multipart form data",
+            "error response formatting",
+            "AUDIO_CONTENT_TYPES constant"
+          ],
+          "category": "functional"
+        },
+        {
+          "id": "REQ_005.2",
+          "description": "Return HTTP 422 for FastAPI validation errors when request payloads are missing required fields or have invalid data types",
+          "type": "sub_process",
+          "parent_id": "REQ_005",
+          "children": [],
+          "acceptance_criteria": [
+            "When POST /api/conversations is called without required 'title' field, return HTTP 422 with validation error details",
+            "When PUT /api/conversations/{id} is called with invalid message format, return HTTP 422 with field-specific error",
+            "When POST /api/themes/extract is called without 'text' field, return HTTP 422 indicating missing required field",
+            "When POST /api/generate is called without 'themes' array, return HTTP 422 indicating missing required field",
+            "When POST /api/generate is called without 'prompt' field, return HTTP 422 indicating missing required field",
+            "Validation error response must include 'detail' array with 'loc' (field location), 'msg' (error message), and 'type' (error type) for each validation failure",
+            "When Message model receives invalid 'role' value (not 'user' or 'assistant'), return HTTP 422",
+            "When Theme model receives 'confidence' value outside 0.0-1.0 range, return HTTP 422",
+            "All Pydantic models must define proper Field constraints with descriptions"
+          ],
+          "implementation": {
+            "frontend": [
+              "Parse 422 error responses and map validation errors to specific form fields",
+              "Display inline validation errors next to the corresponding input fields",
+              "Implement client-side form validation matching backend Pydantic model requirements",
+              "Highlight fields with validation errors and show descriptive error messages"
+            ],
+            "backend": [
+              "Define Pydantic model ConversationCreate with required 'title: str' field",
+              "Define Pydantic model ConversationUpdate with optional fields for partial updates",
+              "Define Pydantic model Message with required 'role: Literal[\"user\", \"assistant\"]' and 'content: str' fields",
+              "Define Pydantic model ThemeExtractionRequest with required 'text: str' field with min_length=1 constraint",
+              "Define Pydantic model GenerateRequest with required 'themes: List[Theme]' (min_items=1) and 'prompt: str' fields",
+              "Define Pydantic model Theme with 'name: str' and 'confidence: float = Field(ge=0.0, le=1.0)'",
+              "Rely on FastAPI's built-in RequestValidationError handler for automatic 422 responses"
+            ],
+            "middleware": [
+              "Configure custom exception handler for RequestValidationError to ensure consistent error format",
+              "Log validation errors with request body (sanitized) for debugging"
+            ],
+            "shared": [
+              "Create base Pydantic model with Config class for consistent JSON serialization",
+              "Define all request/response models in models.py or schemas.py module",
+              "Create TypeScript interfaces matching Pydantic models for frontend type safety",
+              "Document all model field constraints in OpenAPI schema descriptions"
+            ]
+          },
+          "testable_properties": [],
+          "function_id": "ErrorHandler.handleValidationError",
+          "related_concepts": [
+            "Pydantic validation",
+            "request body validation",
+            "JSON schema validation",
+            "FastAPI automatic validation",
+            "data model constraints"
+          ],
+          "category": "functional"
+        },
+        {
+          "id": "REQ_005.3",
+          "description": "Return HTTP 404 for resource not found scenarios when requested files or conversations do not exist",
+          "type": "sub_process",
+          "parent_id": "REQ_005",
+          "children": [],
+          "acceptance_criteria": [
+            "When GET /api/files/{id} is called with non-existent file ID, return HTTP 404 with detail 'File not found'",
+            "When GET /api/conversations/{id} is called with non-existent conversation ID, return HTTP 404 with detail 'Conversation not found'",
+            "When PUT /api/conversations/{id} is called with non-existent conversation ID, return HTTP 404 with detail 'Conversation not found'",
+            "When DELETE /api/conversations/{id} is called with non-existent conversation ID, return HTTP 404 with detail 'Conversation not found'",
+            "When invalid UUID format is provided for resource ID, return HTTP 404 (not 422) with detail 'Resource not found'",
+            "404 responses must use consistent JSON format: {'detail': 'Resource type not found'}",
+            "Resource lookup must occur before any modification operations",
+            "DELETE operations on non-existent resources must return 404 (not 204) to indicate the resource was never present"
+          ],
+          "implementation": {
+            "frontend": [
+              "Handle 404 responses by showing 'Resource not found' message to user",
+              "Implement automatic redirect to list view when accessing non-existent resource detail page",
+              "Cache valid resource IDs to avoid unnecessary 404 requests",
+              "Show appropriate empty state when conversation or file is not found"
+            ],
+            "backend": [
+              "Create helper function get_file_or_404(file_id: str) that raises HTTPException(404, 'File not found') if file_store.get(file_id) is None",
+              "Create helper function get_conversation_or_404(conversation_id: str) that raises HTTPException(404, 'Conversation not found') if conversation_store.get(conversation_id) is None",
+              "Apply get_file_or_404 in GET /api/files/{id} endpoint",
+              "Apply get_conversation_or_404 in GET, PUT, DELETE /api/conversations/{id} endpoints",
+              "Validate UUID format in path parameters and return 404 for malformed IDs",
+              "Use consistent lookup pattern: resource = store.get(id); if not resource: raise HTTPException(404)"
+            ],
+            "middleware": [
+              "Create custom exception handler for NotFoundError to ensure consistent 404 format",
+              "Log 404 errors with requested resource type and ID for monitoring"
+            ],
+            "shared": [
+              "Create custom exception class NotFoundError(HTTPException) with status_code=404",
+              "Define resource type constants: RESOURCE_FILE = 'File', RESOURCE_CONVERSATION = 'Conversation'",
+              "Create utility function format_not_found_message(resource_type: str) -> str"
+            ]
+          },
+          "testable_properties": [],
+          "function_id": "ErrorHandler.handleNotFound",
+          "related_concepts": [
+            "resource lookup",
+            "UUID validation",
+            "in-memory store lookup",
+            "RESTful resource identification",
+            "idempotent operations"
+          ],
+          "category": "functional"
+        },
+        {
+          "id": "REQ_005.4",
+          "description": "Return HTTP 500 for external service failures when OpenAI API calls for transcription, theme extraction, or content generation fail",
+          "type": "sub_process",
+          "parent_id": "REQ_005",
+          "children": [],
+          "acceptance_criteria": [
+            "When OpenAI Whisper API fails during /api/transcribe, return HTTP 500 with detail 'Transcription service failed: {sanitized_error}'",
+            "When OpenAI GPT-4 API fails during /api/themes/extract, return HTTP 500 with detail 'Theme extraction service failed: {sanitized_error}'",
+            "When OpenAI GPT-4 API fails during /api/generate, return HTTP 500 with detail 'Content generation service failed: {sanitized_error}'",
+            "Error messages must NOT expose API keys, internal paths, or sensitive configuration details",
+            "When OpenAI returns rate limit error (429), return HTTP 500 with detail 'Service temporarily unavailable, please retry'",
+            "When OpenAI returns authentication error (401), return HTTP 500 with detail 'Service configuration error' and log full error server-side",
+            "When network timeout occurs calling OpenAI, return HTTP 500 with detail 'Service timeout, please retry'",
+            "All 500 errors must be logged with full stack trace and request context for debugging",
+            "500 response format must be: {'detail': 'Service failed: human-readable message'}"
+          ],
+          "implementation": {
+            "frontend": [
+              "Display user-friendly error message when 500 error occurs: 'Something went wrong. Please try again.'",
+              "Implement retry button for failed transcription/generation operations",
+              "Show loading state with timeout handling for long-running LLM operations",
+              "Distinguish between retryable errors (timeout, rate limit) and non-retryable errors in UI"
+            ],
+            "backend": [
+              "Wrap OpenAI API calls in try/except blocks catching openai.OpenAIError and its subclasses",
+              "Create async function transcribe_audio(file) that catches API errors and raises HTTPException(500)",
+              "Create async function extract_themes(text) that catches API errors and raises HTTPException(500)",
+              "Create async function generate_content(themes, prompt) that catches API errors and raises HTTPException(500)",
+              "Implement error sanitization function sanitize_external_error(error) that removes sensitive data",
+              "Map OpenAI error types to appropriate user-facing messages (RateLimitError -> 'temporarily unavailable')",
+              "Set reasonable timeouts for OpenAI API calls (30s for transcription, 60s for generation)",
+              "Log full error details including request_id, error type, and message before sanitizing for response"
+            ],
+            "middleware": [
+              "Create global exception handler for unhandled exceptions that returns generic 500 response",
+              "Implement request correlation ID for tracing errors across services",
+              "Configure structured logging with error severity levels"
+            ],
+            "shared": [
+              "Create custom exception class ExternalServiceError(HTTPException) with status_code=500",
+              "Define error message templates: TRANSCRIPTION_FAILED, THEME_EXTRACTION_FAILED, GENERATION_FAILED",
+              "Create ErrorDetail model with 'detail' and optional 'retry_after' fields for rate limit scenarios",
+              "Define mapping of OpenAI error codes to user-friendly messages"
+            ]
+          },
+          "testable_properties": [],
+          "function_id": "ErrorHandler.handleExternalServiceFailure",
+          "related_concepts": [
+            "OpenAI API errors",
+            "Whisper API",
+            "GPT-4 API",
+            "error propagation",
+            "service resilience",
+            "error message sanitization"
+          ],
+          "category": "functional"
+        }
+      ],
+      "acceptance_criteria": [],
+      "implementation": null,
+      "testable_properties": [],
+      "function_id": null,
+      "related_concepts": [],
+      "category": "functional"
+    },
+    {
+      "id": "REQ_006",
+      "description": "The system must follow a specific project structure with isolated test suites and proper dependency management",
+      "type": "parent",
+      "parent_id": null,
+      "children": [
+        {
+          "id": "REQ_006.1",
+          "description": "Organize code in backend/ directory with app.py containing all endpoints initially. This establishes the foundational project structure following FastAPI conventions with a single-file approach for initial development simplicity.",
+          "type": "sub_process",
+          "parent_id": "REQ_006",
+          "children": [],
+          "acceptance_criteria": [
+            "backend/ directory exists at project root level",
+            "backend/__init__.py exists to make it a Python package",
+            "backend/app.py contains FastAPI application instance named 'app'",
+            "app.py imports and configures all endpoint routes (/health, /api/files/upload, /api/files/{id}, /api/conversations, /api/conversations/{id}, /api/transcribe, /api/themes/extract, /api/generate)",
+            "In-memory stores (file_store, conversation_store) are defined as module-level dictionaries in app.py",
+            "Pydantic models (FileMetadata, Message, Conversation, Theme) are defined in app.py",
+            "AUDIO_CONTENT_TYPES list is defined with values: audio/webm, audio/mpeg, audio/mp3, audio/wav, audio/ogg, audio/flac",
+            "Application can be started with 'uvicorn backend.app:app --reload'",
+            "OpenAPI documentation is accessible at /docs endpoint",
+            "All endpoint handlers are async functions"
+          ],
+          "implementation": {
+            "frontend": [],
+            "backend": [
+              "Create backend/ directory at project root",
+              "Create backend/__init__.py as empty file for package initialization",
+              "Create backend/app.py with FastAPI() instance",
+              "Define file_store: dict[str, FileMetadata] = {} as module-level variable",
+              "Define conversation_store: dict[str, Conversation] = {} as module-level variable",
+              "Implement FileMetadata Pydantic model with fields: id, filename, content_type, size",
+              "Implement Message Pydantic model with fields: id, role, content, created_at, attachments",
+              "Implement Conversation Pydantic model with fields: id, title, created_at, updated_at, messages",
+              "Implement Theme Pydantic model with fields: name, confidence",
+              "Create GET /health endpoint returning {status: 'healthy'}",
+              "Create POST /api/files/upload endpoint with UploadFile parameter",
+              "Create GET /api/files/{id} endpoint returning FileMetadata",
+              "Create GET /api/conversations endpoint returning list of conversations",
+              "Create POST /api/conversations endpoint creating new conversation",
+              "Create GET /api/conversations/{id} endpoint returning single conversation",
+              "Create PUT /api/conversations/{id} endpoint updating conversation",
+              "Create DELETE /api/conversations/{id} endpoint removing conversation",
+              "Create POST /api/transcribe endpoint accepting audio file",
+              "Create POST /api/themes/extract endpoint accepting text content",
+              "Create POST /api/generate endpoint accepting themes and prompt"
+            ],
+            "middleware": [
+              "Configure CORS middleware if needed for frontend integration",
+              "Add exception handlers for 400, 404, 422, 500 status codes"
+            ],
+            "shared": [
+              "Define AUDIO_CONTENT_TYPES constant list",
+              "Define transcribe_audio async function signature for OpenAI Whisper integration",
+              "Define extract_themes async function signature for theme extraction",
+              "Define generate_content async function signature for LLM generation"
+            ]
+          },
+          "testable_properties": [],
+          "function_id": "ProjectStructure.organizeBackendDirectory",
+          "related_concepts": [
+            "FastAPI application structure",
+            "Python module organization",
+            "ASGI application setup",
+            "endpoint routing",
+            "Pydantic model definitions"
+          ],
+          "category": "functional"
+        },
+        {
+          "id": "REQ_006.2",
+          "description": "Create separate test files for each functional domain: test_health.py, test_files.py, test_conversations.py, test_transcription.py, test_themes.py, test_generation.py. This follows test isolation best practices and enables parallel test execution.",
+          "type": "sub_process",
+          "parent_id": "REQ_006",
+          "children": [],
+          "acceptance_criteria": [
+            "backend/tests/ directory exists",
+            "backend/tests/__init__.py exists to make it a Python package",
+            "test_health.py exists and contains async test for GET /health endpoint",
+            "test_files.py exists and contains tests for file upload (POST /api/files/upload) and retrieval (GET /api/files/{id})",
+            "test_conversations.py exists and contains tests for all conversation CRUD operations",
+            "test_transcription.py exists and contains tests for POST /api/transcribe with mocked OpenAI calls",
+            "test_themes.py exists and contains tests for POST /api/themes/extract",
+            "test_generation.py exists and contains tests for POST /api/generate with mocked LLM calls",
+            "All test files use pytest-asyncio with 'async def test_*' function naming",
+            "All test files use httpx.AsyncClient with ASGITransport for testing",
+            "Each test file imports the app from backend.app",
+            "Tests cover happy path, error cases (400, 404, 422), and edge cases",
+            "Running 'pytest backend/tests/' executes all tests successfully"
+          ],
+          "implementation": {
+            "frontend": [],
+            "backend": [
+              "Create backend/tests/ directory",
+              "Create backend/tests/__init__.py as empty file",
+              "Create test_health.py with test_health_check_returns_healthy() async test",
+              "Create test_files.py with test_upload_file_success(), test_upload_empty_file_returns_400(), test_get_file_metadata(), test_get_nonexistent_file_returns_404()",
+              "Create test_conversations.py with test_create_conversation(), test_list_conversations(), test_get_conversation(), test_update_conversation(), test_delete_conversation(), test_get_nonexistent_conversation_returns_404()",
+              "Create test_transcription.py with test_transcribe_audio_success(), test_transcribe_invalid_content_type_returns_400(), using unittest.mock.patch and AsyncMock",
+              "Create test_themes.py with test_extract_themes_success(), test_extract_themes_empty_text_returns_400()",
+              "Create test_generation.py with test_generate_content_success(), test_generate_with_empty_themes_returns_400(), using mocked LLM calls"
+            ],
+            "middleware": [],
+            "shared": [
+              "Define common test client setup pattern using AsyncClient with ASGITransport",
+              "Define test base URL as 'http://test'",
+              "Create test data fixtures for file uploads, conversations, and audio content"
+            ]
+          },
+          "testable_properties": [],
+          "function_id": "TestSuite.createSeparateTestFiles",
+          "related_concepts": [
+            "pytest test organization",
+            "test isolation",
+            "async testing with pytest-asyncio",
+            "httpx AsyncClient",
+            "ASGI transport testing",
+            "test file naming conventions"
+          ],
+          "category": "functional"
+        },
+        {
+          "id": "REQ_006.3",
+          "description": "Implement conftest.py fixture with autouse=True to clear in-memory stores before and after each test. This ensures complete test isolation and prevents state leakage between test runs.",
+          "type": "sub_process",
+          "parent_id": "REQ_006",
+          "children": [],
+          "acceptance_criteria": [
+            "backend/tests/conftest.py exists",
+            "conftest.py imports file_store and conversation_store from backend.app",
+            "conftest.py defines clear_stores fixture with @pytest.fixture(autouse=True) decorator",
+            "clear_stores fixture calls file_store.clear() before yield",
+            "clear_stores fixture calls conversation_store.clear() before yield",
+            "clear_stores fixture calls file_store.clear() after yield (cleanup)",
+            "clear_stores fixture calls conversation_store.clear() after yield (cleanup)",
+            "Fixture automatically runs for every test without explicit reference",
+            "Each test starts with empty file_store dictionary",
+            "Each test starts with empty conversation_store dictionary",
+            "Tests can be run in any order without affecting each other",
+            "Running tests in parallel (pytest -n auto) maintains isolation"
+          ],
+          "implementation": {
+            "frontend": [],
+            "backend": [
+              "Create backend/tests/conftest.py",
+              "Add import statement: from backend.app import file_store, conversation_store",
+              "Add import statement: import pytest",
+              "Define clear_stores function with @pytest.fixture(autouse=True) decorator",
+              "Implement pre-test cleanup: file_store.clear()",
+              "Implement pre-test cleanup: conversation_store.clear()",
+              "Add yield statement to separate setup from teardown",
+              "Implement post-test cleanup: file_store.clear()",
+              "Implement post-test cleanup: conversation_store.clear()",
+              "Optionally add pytest-asyncio mode configuration: pytest_plugins = ['pytest_asyncio']"
+            ],
+            "middleware": [],
+            "shared": [
+              "Ensure file_store and conversation_store are exported from backend.app module",
+              "Document fixture behavior in docstring for clear_stores function"
+            ]
+          },
+          "testable_properties": [],
+          "function_id": "TestFixtures.implementConftestPy",
+          "related_concepts": [
+            "pytest fixtures",
+            "autouse fixtures",
+            "test isolation",
+            "setup and teardown",
+            "yield fixtures",
+            "test state management"
+          ],
+          "category": "functional"
+        },
+        {
+          "id": "REQ_006.4",
+          "description": "Install dependencies: fastapi>=0.109.0, uvicorn>=0.27.0, pydantic>=2.0.0, openai>=1.0.0, httpx>=0.26.0, pytest>=7.4.0, pytest-asyncio>=0.23.0. Proper dependency management ensures reproducible builds and compatible package versions.",
+          "type": "sub_process",
+          "parent_id": "REQ_006",
+          "children": [],
+          "acceptance_criteria": [
+            "backend/requirements.txt exists with all dependencies listed",
+            "fastapi>=0.109.0 is listed in requirements.txt",
+            "uvicorn[standard]>=0.27.0 is listed in requirements.txt (with standard extras for performance)",
+            "pydantic>=2.0.0 is listed in requirements.txt",
+            "pydantic-settings>=2.0.0 is listed in requirements.txt",
+            "openai>=1.0.0 is listed in requirements.txt",
+            "httpx>=0.26.0 is listed in requirements.txt",
+            "pytest>=7.4.0 is listed in requirements.txt",
+            "pytest-asyncio>=0.23.0 is listed in requirements.txt",
+            "backend/pyproject.toml exists with proper project metadata",
+            "pyproject.toml defines [project] section with name, version, dependencies",
+            "pyproject.toml defines [project.optional-dependencies] section for dev/test dependencies",
+            "pyproject.toml configures pytest-asyncio mode in [tool.pytest.ini_options]",
+            "'pip install -r backend/requirements.txt' completes without errors",
+            "All imports in app.py and test files resolve correctly after installation",
+            "Virtual environment is documented in README or setup instructions"
+          ],
+          "implementation": {
+            "frontend": [],
+            "backend": [
+              "Create backend/requirements.txt with production dependencies",
+              "Add line: fastapi>=0.109.0",
+              "Add line: uvicorn[standard]>=0.27.0",
+              "Add line: pydantic>=2.0.0",
+              "Add line: pydantic-settings>=2.0.0",
+              "Add line: openai>=1.0.0",
+              "Add line: httpx>=0.26.0",
+              "Add line: pytest>=7.4.0 (or separate into requirements-dev.txt)",
+              "Add line: pytest-asyncio>=0.23.0 (or separate into requirements-dev.txt)",
+              "Add line: python-multipart>=0.0.6 (required for file uploads in FastAPI)",
+              "Create backend/pyproject.toml with [build-system] section",
+              "Add [project] section with name='writing-agent-backend', version='0.1.0'",
+              "Add [project.dependencies] mirroring requirements.txt",
+              "Add [project.optional-dependencies] dev = ['pytest>=7.4.0', 'pytest-asyncio>=0.23.0']",
+              "Add [tool.pytest.ini_options] with asyncio_mode = 'auto'"
+            ],
+            "middleware": [],
+            "shared": [
+              "Document Python version requirement (>=3.10 recommended for async features)",
+              "Document virtual environment setup: python -m venv venv && source venv/bin/activate",
+              "Document installation command: pip install -r requirements.txt",
+              "Consider adding pip-tools or poetry for dependency locking in production"
+            ]
+          },
+          "testable_properties": [],
+          "function_id": "DependencyManagement.installDependencies",
+          "related_concepts": [
+            "pip package management",
+            "requirements.txt",
+            "pyproject.toml",
+            "semantic versioning",
+            "virtual environments",
+            "development dependencies vs production dependencies"
+          ],
+          "category": "functional"
+        }
+      ],
+      "acceptance_criteria": [],
+      "implementation": null,
+      "testable_properties": [],
+      "function_id": null,
+      "related_concepts": [],
+      "category": "functional"
+    }
+  ],
+  "metadata": {
+    "source": "agent_sdk_decomposition",
+    "research_length": 6028,
+    "decomposition_stats": {
+      "requirements_found": 7,
+      "subprocesses_expanded": 30,
+      "total_nodes": 37,
+      "extraction_time_ms": 17430,
+      "expansion_time_ms": 343553
+    }
+  }
+}

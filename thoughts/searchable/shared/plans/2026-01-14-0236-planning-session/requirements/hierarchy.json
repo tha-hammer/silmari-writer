@@ -1,0 +1,14 @@
+{
+  "requirements": [],
+  "metadata": {
+    "decomposition_stats": {
+      "expansion_time_ms": 0,
+      "extraction_time_ms": 3469,
+      "requirements_found": 0,
+      "subprocesses_expanded": 0,
+      "total_nodes": 0
+    },
+    "research_length": 46273,
+    "source": "agent_sdk_decomposition"
+  }
+}
