@@ -3,8 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "baml-generate": "baml-cli generate",
     "dev": "next dev",
-    "build": "next build",
+    "build": "npx run baml-generate && next build",
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
@@ -17,6 +18,7 @@
     "deploy": "vercel --prod"
   },
   "dependencies": {
+    "@boundaryml/baml": "^0.217.0",
     "@tailwindcss/typography": "^0.5.19",
     "@types/react-syntax-highlighter": "^15.5.13",
     "lucide-react": "^0.562.0",

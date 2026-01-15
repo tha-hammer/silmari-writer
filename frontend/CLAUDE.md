@@ -1,0 +1,1 @@
+When referencing BAML or baml_src follow these guidelines: .cursor/rules/baml-rules.mdc

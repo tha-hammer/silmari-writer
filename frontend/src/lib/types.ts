@@ -52,4 +52,5 @@ export interface Message {
   content: string;
   timestamp: Date;
   attachments?: Attachment[];
+  isVoiceTranscription?: boolean; // Indicates message originated from voice transcription
 }

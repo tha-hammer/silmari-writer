@@ -38,7 +38,7 @@ export default function HomePage() {
     }
   }, [_hasHydrated, projects.length, createProject]);
 
-  const handleSendMessage = async (content: string) => {
+  const handleSendMessage = async (content: string, isVoiceTranscription = false) => {
     if (!activeProjectId) return;
 
     setError(null);
@@ -48,6 +48,7 @@ export default function HomePage() {
       role: 'user',
       content,
       timestamp: new Date(),
+      isVoiceTranscription,
     });
 
     setIsGenerating(true);
@@ -78,7 +79,13 @@ export default function HomePage() {
 
     try {
       const text = await transcribeAudio(blob);
-      await handleSendMessage(text);
+
+      if (!text || text.trim().length === 0) {
+        setError('No speech detected in recording. Please try again.');
+        return;
+      }
+
+      await handleSendMessage(text, true); // Mark as voice transcription
     } catch (err) {
       setError('Failed to transcribe audio. Please try again.');
       console.error('Failed to transcribe audio:', err);
@@ -97,7 +104,7 @@ export default function HomePage() {
 
     try {
       const text = await transcribeAudio(file);
-      await handleSendMessage(text);
+      await handleSendMessage(text, true); // Mark as voice transcription
     } catch (err) {
       setError(`Failed to transcribe ${file.name}. Please try again.`);
       console.error('Failed to transcribe file:', err);

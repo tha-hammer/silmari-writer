@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
+import { b } from "../../../baml_client"
+import type { Resume } from "../../../baml_client/types"
 
 const MAX_RETRIES = 3;
 const BASE_RETRY_DELAY_MS = 2000;

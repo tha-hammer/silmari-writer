@@ -9,12 +9,6 @@ global.fetch = mockFetch
 describe('transcribeAudio', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    // Set default API key for tests
-    vi.stubEnv('OPENAI_API_KEY', 'sk-test-key-123')
-  })
-
-  afterEach(() => {
-    vi.unstubAllEnvs()
   })
 
   describe('file size validation', () => {
@@ -53,7 +47,7 @@ describe('transcribeAudio', () => {
   })
 
   describe('successful transcription', () => {
-    it('should POST to OpenAI Whisper API with correct FormData', async () => {
+    it('should POST to /api/transcribe with correct FormData', async () => {
       const audioBlob = new Blob(['test audio'], { type: 'audio/webm' })
 
       mockFetch.mockResolvedValueOnce({
@@ -65,20 +59,16 @@ describe('transcribeAudio', () => {
 
       expect(mockFetch).toHaveBeenCalledTimes(1)
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://api.openai.com/v1/audio/transcriptions',
+        '/api/transcribe',
         expect.objectContaining({
           method: 'POST',
-          headers: expect.objectContaining({
-            'Authorization': 'Bearer sk-test-key-123',
-          }),
         })
       )
 
-      // Verify FormData contains file and model
+      // Verify FormData contains file
       const [, options] = mockFetch.mock.calls[0]
       expect(options.body).toBeInstanceOf(FormData)
       const formData = options.body as FormData
-      expect(formData.get('model')).toBe('whisper-1')
       expect(formData.get('file')).toBeInstanceOf(Blob)
     })
 
@@ -109,7 +99,7 @@ describe('transcribeAudio', () => {
       expect(formData.get('language')).toBe('es')
     })
 
-    it('should pass prompt option to API', async () => {
+    it('should use .webm extension for audio/webm files', async () => {
       const audioBlob = new Blob(['test audio'], { type: 'audio/webm' })
 
       mockFetch.mockResolvedValueOnce({
@@ -117,11 +107,28 @@ describe('transcribeAudio', () => {
         json: () => Promise.resolve({ text: 'transcribed text' }),
       })
 
-      await transcribeAudio(audioBlob, { prompt: 'This is a technical discussion' })
+      await transcribeAudio(audioBlob)
 
       const [, options] = mockFetch.mock.calls[0]
       const formData = options.body as FormData
-      expect(formData.get('prompt')).toBe('This is a technical discussion')
+      const file = formData.get('file') as File
+      expect(file.name).toBe('recording.webm')
+    })
+
+    it('should use .mp4 extension for audio/mp4 files', async () => {
+      const audioBlob = new Blob(['test audio'], { type: 'audio/mp4' })
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ text: 'transcribed text' }),
+      })
+
+      await transcribeAudio(audioBlob)
+
+      const [, options] = mockFetch.mock.calls[0]
+      const formData = options.body as FormData
+      const file = formData.get('file') as File
+      expect(file.name).toBe('recording.mp4')
     })
   })
 
@@ -132,7 +139,11 @@ describe('transcribeAudio', () => {
       mockFetch.mockResolvedValueOnce({
         ok: false,
         status: 401,
-        json: () => Promise.resolve({ error: { message: 'Invalid API key' } }),
+        json: () => Promise.resolve({
+          error: 'Invalid API key',
+          code: 'INVALID_API_KEY',
+          retryable: false
+        }),
       })
 
       await expect(transcribeAudio(audioBlob)).rejects.toMatchObject({
@@ -141,28 +152,15 @@ describe('transcribeAudio', () => {
       })
     })
 
-    it('should throw NETWORK error on network failure after retries', async () => {
-      vi.useFakeTimers()
+    it('should throw NETWORK error on network failure', async () => {
       const audioBlob = new Blob(['test audio'], { type: 'audio/webm' })
 
-      // All calls fail with network error
-      mockFetch.mockRejectedValue(new Error('Network error'))
+      mockFetch.mockRejectedValueOnce(new Error('Network error'))
 
-      const promise = transcribeAudio(audioBlob)
-
-      // Advance through all retry delays: 1000ms + 2000ms + 4000ms
-      await vi.advanceTimersByTimeAsync(1000)
-      await vi.advanceTimersByTimeAsync(2000)
-      await vi.advanceTimersByTimeAsync(4000)
-
-      await expect(promise).rejects.toMatchObject({
+      await expect(transcribeAudio(audioBlob)).rejects.toMatchObject({
         code: 'NETWORK',
         retryable: true,
       })
-      // Initial call + 3 retries = 4 total calls
-      expect(mockFetch).toHaveBeenCalledTimes(4)
-
-      vi.useRealTimers()
     })
 
     it('should throw API_ERROR on other API errors', async () => {
@@ -171,7 +169,11 @@ describe('transcribeAudio', () => {
       mockFetch.mockResolvedValueOnce({
         ok: false,
         status: 400,
-        json: () => Promise.resolve({ error: { message: 'Bad request' } }),
+        json: () => Promise.resolve({
+          error: 'Bad request',
+          code: 'API_ERROR',
+          retryable: false
+        }),
       })
 
       await expect(transcribeAudio(audioBlob)).rejects.toMatchObject({
@@ -179,111 +181,24 @@ describe('transcribeAudio', () => {
         retryable: false,
       })
     })
-  })
 
-  describe('retry logic', () => {
-    beforeEach(() => {
-      vi.useFakeTimers()
-    })
-
-    afterEach(async () => {
-      // Run all pending timers to avoid unhandled promise rejections
-      await vi.runAllTimersAsync()
-      vi.useRealTimers()
-    })
-
-    it('should retry on 429 rate limit error with exponential backoff', async () => {
-      const audioBlob = new Blob(['test audio'], { type: 'audio/webm' })
-
-      // First two calls return 429, third succeeds
-      mockFetch
-        .mockResolvedValueOnce({
-          ok: false,
-          status: 429,
-          json: () => Promise.resolve({ error: { message: 'Rate limit exceeded' } }),
-        })
-        .mockResolvedValueOnce({
-          ok: false,
-          status: 429,
-          json: () => Promise.resolve({ error: { message: 'Rate limit exceeded' } }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({ text: 'success after retry' }),
-        })
-
-      const promise = transcribeAudio(audioBlob)
-
-      // First retry after 1000ms
-      await vi.advanceTimersByTimeAsync(1000)
-      // Second retry after 2000ms (exponential backoff)
-      await vi.advanceTimersByTimeAsync(2000)
-
-      const result = await promise
-      expect(result).toBe('success after retry')
-      expect(mockFetch).toHaveBeenCalledTimes(3)
-    })
-
-    it('should retry on 500 server errors', async () => {
-      const audioBlob = new Blob(['test audio'], { type: 'audio/webm' })
-
-      mockFetch
-        .mockResolvedValueOnce({
-          ok: false,
-          status: 500,
-          json: () => Promise.resolve({ error: { message: 'Internal server error' } }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({ text: 'success after retry' }),
-        })
-
-      const promise = transcribeAudio(audioBlob)
-      await vi.advanceTimersByTimeAsync(1000)
-
-      const result = await promise
-      expect(result).toBe('success after retry')
-      expect(mockFetch).toHaveBeenCalledTimes(2)
-    })
-
-    it('should fail after max retries exceeded', async () => {
-      const audioBlob = new Blob(['test audio'], { type: 'audio/webm' })
-
-      // All calls return 429
-      mockFetch.mockResolvedValue({
-        ok: false,
-        status: 429,
-        json: () => Promise.resolve({ error: { message: 'Rate limit exceeded' } }),
-      })
-
-      const promise = transcribeAudio(audioBlob)
-
-      // Advance through all retry delays: 1000ms + 2000ms + 4000ms
-      await vi.advanceTimersByTimeAsync(1000)
-      await vi.advanceTimersByTimeAsync(2000)
-      await vi.advanceTimersByTimeAsync(4000)
-
-      await expect(promise).rejects.toMatchObject({
-        code: 'RATE_LIMIT',
-        retryable: true,
-      })
-      // Initial call + 3 retries = 4 total calls
-      expect(mockFetch).toHaveBeenCalledTimes(4)
-    })
-
-    it('should not retry on non-retryable errors', async () => {
+    it('should handle error responses with retryable flag', async () => {
       const audioBlob = new Blob(['test audio'], { type: 'audio/webm' })
 
       mockFetch.mockResolvedValueOnce({
         ok: false,
-        status: 401,
-        json: () => Promise.resolve({ error: { message: 'Invalid API key' } }),
+        status: 429,
+        json: () => Promise.resolve({
+          error: 'Rate limit exceeded',
+          code: 'RATE_LIMIT',
+          retryable: true
+        }),
       })
 
       await expect(transcribeAudio(audioBlob)).rejects.toMatchObject({
-        code: 'INVALID_API_KEY',
+        code: 'RATE_LIMIT',
+        retryable: true,
       })
-      expect(mockFetch).toHaveBeenCalledTimes(1)
     })
   })
 })
