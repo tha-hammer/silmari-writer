@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "baml-generate": "baml-cli generate",
+    "baml-generate": "baml-cli generate --from ./src/baml_src",
     "dev": "next dev",
-    "build": "npx run baml-generate && next build",
+    "build": "baml-cli generate --from ./src/baml_src && next build",
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
