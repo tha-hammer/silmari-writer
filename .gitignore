@@ -188,3 +188,5 @@ Thumbs.db
 # Local tooling state
 .agent/
 .rlm-act-checkpoints/
+.vercel
+.env*.local
