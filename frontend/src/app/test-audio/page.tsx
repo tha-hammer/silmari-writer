@@ -1,13 +1,14 @@
 'use client'
 
-import { useState } from 'react'
-import AudioRecorder from '@/components/chat/AudioRecorder'
+import { useState, useRef } from 'react'
+import AudioRecorder, { AudioRecorderHandle } from '@/components/chat/AudioRecorder'
 
 export default function TestAudioPage() {
   const [transcription, setTranscription] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [lastBlob, setLastBlob] = useState<Blob | null>(null)
+  const audioRecorderRef = useRef<AudioRecorderHandle>(null)
 
   const handleRecordingComplete = async (blob: Blob) => {
     setLastBlob(blob)
@@ -35,6 +36,8 @@ export default function TestAudioPage() {
       setError(err instanceof Error ? err.message : 'Transcription failed')
     } finally {
       setLoading(false)
+      // Reset recorder to idle state so user can record again
+      audioRecorderRef.current?.reset()
     }
   }
 
@@ -48,7 +51,10 @@ export default function TestAudioPage() {
 
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
           <h2 className="text-xl font-semibold mb-4">Record Audio</h2>
-          <AudioRecorder onRecordingComplete={handleRecordingComplete} />
+          <AudioRecorder
+            ref={audioRecorderRef}
+            onRecordingComplete={handleRecordingComplete}
+          />
 
           {lastBlob && (
             <p className="mt-4 text-sm text-gray-500">

@@ -1,13 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Loader2 } from 'lucide-react';
 import AppLayout from '@/components/layout/AppLayout';
 import ProjectSidebar from '@/components/layout/ProjectSidebar';
 import ConversationView from '@/components/chat/ConversationView';
 import MessageInput from '@/components/chat/MessageInput';
 import FileAttachment from '@/components/chat/FileAttachment';
-import AudioRecorder from '@/components/chat/AudioRecorder';
+import AudioRecorder, { AudioRecorderHandle } from '@/components/chat/AudioRecorder';
 import { useConversationStore } from '@/lib/store';
 import { transcribeAudio } from '@/lib/transcription';
 import { generateResponse } from '@/lib/api';
@@ -27,6 +27,7 @@ export default function HomePage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isTranscribing, setIsTranscribing] = useState(false);
+  const audioRecorderRef = useRef<AudioRecorderHandle>(null);
 
   const activeMessages = activeProjectId ? getMessages(activeProjectId) : [];
 
@@ -83,6 +84,8 @@ export default function HomePage() {
       console.error('Failed to transcribe audio:', err);
     } finally {
       setIsTranscribing(false);
+      // Reset recorder to idle state so user can record again
+      audioRecorderRef.current?.reset();
     }
   };
 
@@ -147,7 +150,10 @@ export default function HomePage() {
                     <FileAttachment onFilesChange={setFiles} />
                   </div>
                   <div className="flex-shrink-0">
-                    <AudioRecorder onRecordingComplete={handleRecordingComplete} />
+                    <AudioRecorder
+                      ref={audioRecorderRef}
+                      onRecordingComplete={handleRecordingComplete}
+                    />
                   </div>
                 </div>
               </div>

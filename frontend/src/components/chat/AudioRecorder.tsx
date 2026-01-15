@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react'
 import { Mic, Square, Play, Pause, RotateCcw } from 'lucide-react'
 
 // Constants
@@ -11,21 +11,26 @@ interface AudioRecorderProps {
   onRecordingComplete: (audioBlob: Blob) => void
 }
 
+export interface AudioRecorderHandle {
+  reset: () => void
+}
+
 type RecorderState = 'idle' | 'recording' | 'stopped' | 'error'
 
-export default function AudioRecorder({ onRecordingComplete }: AudioRecorderProps) {
-  const [state, setState] = useState<RecorderState>('idle')
-  const [recordingTime, setRecordingTime] = useState(0)
-  const [, setAudioBlob] = useState<Blob | null>(null)
-  const [audioUrl, setAudioUrl] = useState<string | null>(null)
-  const [isPlaying, setIsPlaying] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+const AudioRecorder = forwardRef<AudioRecorderHandle, AudioRecorderProps>(
+  ({ onRecordingComplete }, ref) => {
+    const [state, setState] = useState<RecorderState>('idle')
+    const [recordingTime, setRecordingTime] = useState(0)
+    const [, setAudioBlob] = useState<Blob | null>(null)
+    const [audioUrl, setAudioUrl] = useState<string | null>(null)
+    const [isPlaying, setIsPlaying] = useState(false)
+    const [error, setError] = useState<string | null>(null)
 
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
-  const streamRef = useRef<MediaStream | null>(null)
-  const audioRef = useRef<HTMLAudioElement | null>(null)
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const stopRecordingRef = useRef<(() => void) | null>(null)
+    const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+    const streamRef = useRef<MediaStream | null>(null)
+    const audioRef = useRef<HTMLAudioElement | null>(null)
+    const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+    const stopRecordingRef = useRef<(() => void) | null>(null)
 
   // Cleanup on unmount
   useEffect(() => {
@@ -181,6 +186,37 @@ export default function AudioRecorder({ onRecordingComplete }: AudioRecorderProp
     setIsPlaying(false)
   }
 
+  // Expose reset method to parent via ref
+  useImperativeHandle(ref, () => ({
+    reset: () => {
+      // Clean up audio
+      if (audioUrl) {
+        URL.revokeObjectURL(audioUrl)
+        setAudioUrl(null)
+      }
+      setAudioBlob(null)
+
+      // Reset state
+      setState('idle')
+      setRecordingTime(0)
+      setIsPlaying(false)
+      setError(null)
+
+      // Stop any active recording
+      if (timerRef.current) {
+        clearInterval(timerRef.current)
+        timerRef.current = null
+      }
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+        mediaRecorderRef.current.stop()
+      }
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop())
+        streamRef.current = null
+      }
+    }
+  }))
+
   return (
     <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
       {/* Hidden audio element for playback */}
@@ -285,4 +321,8 @@ export default function AudioRecorder({ onRecordingComplete }: AudioRecorderProp
       )}
     </div>
   )
-}
+})
+
+AudioRecorder.displayName = 'AudioRecorder'
+
+export default AudioRecorder
