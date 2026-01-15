@@ -3,14 +3,13 @@ import { TranscriptionOptions, TranscriptionError } from './types'
 // Constants
 export const MAX_FILE_SIZE_MB = 25
 export const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
-const MAX_RETRIES = 3
-const RETRY_DELAY_MS = 1000
 
 /**
- * Transcribes audio using OpenAI Whisper API with retry logic
+ * Transcribes audio using the server-side API route
+ * The API route handles the OpenAI Whisper call with the API key securely
  *
  * @param audioBlob - Audio file as a Blob (max 25MB)
- * @param options - Optional transcription settings (language, prompt, temperature)
+ * @param options - Optional transcription settings (language)
  * @returns Transcribed text
  * @throws TranscriptionError with appropriate error code
  */
@@ -18,7 +17,7 @@ export async function transcribeAudio(
   audioBlob: Blob,
   options?: TranscriptionOptions
 ): Promise<string> {
-  // Validate file size
+  // Validate file size client-side for immediate feedback
   if (audioBlob.size > MAX_FILE_SIZE_BYTES) {
     throw new TranscriptionError(
       `File size exceeds ${MAX_FILE_SIZE_MB}MB limit`,
@@ -27,56 +26,22 @@ export async function transcribeAudio(
     )
   }
 
-  return transcribeWithRetry(audioBlob, options, 0)
-}
-
-async function transcribeWithRetry(
-  audioBlob: Blob,
-  options: TranscriptionOptions | undefined,
-  retries: number
-): Promise<string> {
-  try {
-    return await makeTranscriptionRequest(audioBlob, options)
-  } catch (error) {
-    if (error instanceof TranscriptionError && error.retryable && retries < MAX_RETRIES) {
-      const delay = RETRY_DELAY_MS * Math.pow(2, retries)
-      console.warn(`Retry ${retries + 1}/${MAX_RETRIES} after ${delay}ms`)
-      await new Promise(resolve => setTimeout(resolve, delay))
-      return transcribeWithRetry(audioBlob, options, retries + 1)
-    }
-    throw error
-  }
-}
-
-async function makeTranscriptionRequest(
-  audioBlob: Blob,
-  options?: TranscriptionOptions
-): Promise<string> {
   const formData = new FormData()
 
   // Determine file extension based on blob type
   const extension = audioBlob.type.includes('mp4') ? 'mp4' : 'webm'
   formData.append('file', audioBlob, `recording.${extension}`)
-  formData.append('model', 'whisper-1')
 
-  // Add optional parameters
+  // Add optional language parameter
   if (options?.language) {
     formData.append('language', options.language)
-  }
-  if (options?.prompt) {
-    formData.append('prompt', options.prompt)
-  }
-  if (options?.temperature !== undefined) {
-    formData.append('temperature', options.temperature.toString())
   }
 
   let response: Response
   try {
-    response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+    // Call the server-side API route (which has access to OPENAI_API_KEY)
+    response = await fetch('/api/transcribe', {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
-      },
       body: formData,
     })
   } catch (error) {
@@ -87,41 +52,15 @@ async function makeTranscriptionRequest(
     )
   }
 
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({ error: { message: 'Unknown error' } }))
-    const errorMessage = errorData.error?.message || 'Unknown API error'
+  const data = await response.json()
 
-    switch (response.status) {
-      case 401:
-        throw new TranscriptionError(
-          `Invalid API key: ${errorMessage}`,
-          'INVALID_API_KEY',
-          false
-        )
-      case 429:
-        throw new TranscriptionError(
-          `Rate limit exceeded: ${errorMessage}`,
-          'RATE_LIMIT',
-          true
-        )
-      case 500:
-      case 502:
-      case 503:
-      case 504:
-        throw new TranscriptionError(
-          `Server error: ${errorMessage}`,
-          'API_ERROR',
-          true
-        )
-      default:
-        throw new TranscriptionError(
-          `API error (${response.status}): ${errorMessage}`,
-          'API_ERROR',
-          false
-        )
-    }
+  if (!response.ok) {
+    throw new TranscriptionError(
+      data.error || 'Transcription failed',
+      data.code || 'API_ERROR',
+      data.retryable ?? false
+    )
   }
 
-  const data = await response.json()
   return data.text
 }
