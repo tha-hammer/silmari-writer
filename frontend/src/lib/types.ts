@@ -32,3 +32,24 @@ export class TranscriptionError extends Error {
     this.retryable = retryable;
   }
 }
+
+/**
+ * Attachment for messages (files, images, etc.)
+ */
+export interface Attachment {
+  id: string;
+  filename: string;
+  size: number;
+  type: string;
+}
+
+/**
+ * Message in a conversation
+ */
+export interface Message {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: Date;
+  attachments?: Attachment[];
+}
