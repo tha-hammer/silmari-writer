@@ -6,6 +6,10 @@ interface ConversationState {
   projects: Project[]
   activeProjectId: string | null
   messages: Record<string, Message[]> // projectId -> messages
+  _hasHydrated: boolean
+
+  // Hydration
+  setHasHydrated: (state: boolean) => void
 
   // Project actions
   createProject: (name: string) => string
@@ -31,6 +35,11 @@ export const useConversationStore = create<ConversationState>()(
       projects: [],
       activeProjectId: null,
       messages: {},
+      _hasHydrated: false,
+
+      setHasHydrated: (state) => {
+        set({ _hasHydrated: state })
+      },
 
       createProject: (name) => {
         const id = crypto.randomUUID()
@@ -123,6 +132,9 @@ export const useConversationStore = create<ConversationState>()(
     }),
     {
       name: 'conversation-storage',
+      onRehydrateStorage: () => (state) => {
+        state?.setHasHydrated(true)
+      },
     }
   )
 )

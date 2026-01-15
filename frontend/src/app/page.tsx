@@ -1,36 +1,100 @@
-'use client'
+'use client';
 
-import { useState } from 'react'
-import AppLayout from '@/components/layout/AppLayout'
-import ProjectSidebar from '@/components/layout/ProjectSidebar'
-import type { Project } from '@/lib/types'
+import { useState, useEffect } from 'react';
+import { Loader2 } from 'lucide-react';
+import AppLayout from '@/components/layout/AppLayout';
+import ProjectSidebar from '@/components/layout/ProjectSidebar';
+import ConversationView from '@/components/chat/ConversationView';
+import MessageInput from '@/components/chat/MessageInput';
+import FileAttachment from '@/components/chat/FileAttachment';
+import AudioRecorder from '@/components/chat/AudioRecorder';
+import { useConversationStore } from '@/lib/store';
+import { transcribeAudio } from '@/lib/transcription';
+import { generateResponse } from '@/lib/api';
 
-const demoProjects: Project[] = [
-  { id: '1', name: 'Project A', createdAt: new Date(), updatedAt: new Date() },
-  { id: '2', name: 'Project B', createdAt: new Date(), updatedAt: new Date() },
-]
+export default function HomePage() {
+  const {
+    projects,
+    activeProjectId,
+    createProject,
+    setActiveProject,
+    addMessage,
+    getMessages,
+    _hasHydrated,
+  } = useConversationStore();
 
-export default function Home() {
-  const [projects, setProjects] = useState<Project[]>(demoProjects)
-  const [activeProjectId, setActiveProjectId] = useState<string | null>('1')
+  const [files, setFiles] = useState<File[]>([]);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+
+  const activeMessages = activeProjectId ? getMessages(activeProjectId) : [];
+
+  // Auto-create first project on initial load (only after hydration)
+  useEffect(() => {
+    if (_hasHydrated && projects.length === 0) {
+      createProject('My First Project');
+    }
+  }, [_hasHydrated, projects.length, createProject]);
+
+  const handleSendMessage = async (content: string) => {
+    if (!activeProjectId) return;
+
+    setError(null);
+
+    // Add user message
+    addMessage(activeProjectId, {
+      role: 'user',
+      content,
+      timestamp: new Date(),
+    });
+
+    setIsGenerating(true);
+
+    try {
+      // Generate AI response
+      const response = await generateResponse(content, activeMessages);
+
+      addMessage(activeProjectId, {
+        role: 'assistant',
+        content: response,
+        timestamp: new Date(),
+      });
+    } catch (err) {
+      setError('Failed to generate response. Please try again.');
+      console.error('Failed to generate response:', err);
+    } finally {
+      setIsGenerating(false);
+      setFiles([]);
+    }
+  };
+
+  const handleRecordingComplete = async (blob: Blob) => {
+    if (!activeProjectId) return;
+
+    setIsTranscribing(true);
+    setError(null);
+
+    try {
+      const text = await transcribeAudio(blob);
+      await handleSendMessage(text);
+    } catch (err) {
+      setError('Failed to transcribe audio. Please try again.');
+      console.error('Failed to transcribe audio:', err);
+    } finally {
+      setIsTranscribing(false);
+    }
+  };
 
   const handleNewProject = () => {
-    const newProject: Project = {
-      id: String(Date.now()),
-      name: `New Project ${projects.length + 1}`,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    }
-    setProjects([...projects, newProject])
-    setActiveProjectId(newProject.id)
-  }
-
-  const activeProject = projects.find((p) => p.id === activeProjectId)
+    const projectNumber = projects.length + 1;
+    createProject(`New Project ${projectNumber}`);
+  };
 
   return (
     <AppLayout>
       <div className="flex h-full">
-        {/* Sidebar content */}
+        {/* Sidebar */}
         <div className="w-64 border-r border-border bg-card hidden lg:block">
           <div className="p-4">
             <h2 className="text-lg font-semibold mb-4">Projects</h2>
@@ -38,20 +102,56 @@ export default function Home() {
           <ProjectSidebar
             projects={projects}
             activeProjectId={activeProjectId}
-            onSelectProject={setActiveProjectId}
+            onSelectProject={setActiveProject}
             onNewProject={handleNewProject}
           />
         </div>
 
         {/* Main content area */}
-        <div className="flex-1 p-8">
-          {activeProject ? (
-            <div>
-              <h1 className="text-2xl font-bold mb-4">{activeProject.name}</h1>
-              <p className="text-muted-foreground">
-                Start typing or upload a file to begin your writing session.
-              </p>
-            </div>
+        <div className="flex-1 flex flex-col">
+          {activeProjectId ? (
+            <>
+              <ConversationView messages={activeMessages} />
+
+              {/* Loading indicator */}
+              {isGenerating && (
+                <div className="flex items-center gap-2 px-4 py-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Generating response...
+                </div>
+              )}
+
+              {/* Transcribing indicator */}
+              {isTranscribing && (
+                <div className="flex items-center gap-2 px-4 py-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Transcribing...
+                </div>
+              )}
+
+              {/* Error message */}
+              {error && (
+                <div className="px-4 py-2 text-sm text-destructive" role="alert">
+                  {error}
+                </div>
+              )}
+
+              {/* Input area */}
+              <div className="border-t p-4">
+                <MessageInput
+                  onSendMessage={handleSendMessage}
+                  disabled={isGenerating || isTranscribing}
+                />
+                <div className="mt-4 flex gap-4">
+                  <div className="flex-1">
+                    <FileAttachment onFilesChange={setFiles} />
+                  </div>
+                  <div className="flex-shrink-0">
+                    <AudioRecorder onRecordingComplete={handleRecordingComplete} />
+                  </div>
+                </div>
+              </div>
+            </>
           ) : (
             <div className="flex items-center justify-center h-full">
               <p className="text-muted-foreground">
@@ -62,5 +162,5 @@ export default function Home() {
         </div>
       </div>
     </AppLayout>
-  )
+  );
 }
