@@ -7,6 +7,7 @@ export const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
 /**
  * Transcribes audio using the server-side API route
  * The API route handles the OpenAI Whisper call with the API key securely
+ * Uses Vercel Blob storage to bypass the 4.5MB serverless function body limit
  *
  * @param audioBlob - Audio file as a Blob (max 25MB)
  * @param options - Optional transcription settings (language)
@@ -26,23 +27,54 @@ export async function transcribeAudio(
     )
   }
 
-  const formData = new FormData()
+  // Step 1: Upload to Vercel Blob
+  let blobUrl: string
+  try {
+    const uploadFormData = new FormData()
+    const extension = audioBlob.type.includes('mp4') ? 'mp4' : 'webm'
+    uploadFormData.append('file', audioBlob, `recording-${Date.now()}.${extension}`)
 
-  // Determine file extension based on blob type
-  const extension = audioBlob.type.includes('mp4') ? 'mp4' : 'webm'
-  formData.append('file', audioBlob, `recording.${extension}`)
+    const uploadResponse = await fetch('/api/upload', {
+      method: 'POST',
+      body: uploadFormData,
+    })
 
-  // Add optional language parameter
-  if (options?.language) {
-    formData.append('language', options.language)
+    if (!uploadResponse.ok) {
+      const uploadData = await uploadResponse.json()
+      throw new TranscriptionError(
+        uploadData.error || 'Failed to upload file',
+        uploadData.code || 'UPLOAD_ERROR',
+        false
+      )
+    }
+
+    const uploadData = await uploadResponse.json()
+    blobUrl = uploadData.url
+  } catch (error) {
+    if (error instanceof TranscriptionError) {
+      throw error
+    }
+    throw new TranscriptionError(
+      `Upload failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      'UPLOAD_ERROR',
+      true
+    )
   }
 
+  // Step 2: Transcribe from blob URL
   let response: Response
   try {
-    // Call the server-side API route (which has access to OPENAI_API_KEY)
+    const transcribePayload = {
+      blobUrl,
+      ...(options?.language ? { language: options.language } : {}),
+    }
+
     response = await fetch('/api/transcribe', {
       method: 'POST',
-      body: formData,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(transcribePayload),
     })
   } catch (error) {
     throw new TranscriptionError(

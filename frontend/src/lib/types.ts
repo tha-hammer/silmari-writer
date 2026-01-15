@@ -19,7 +19,7 @@ export interface TranscriptionOptions {
   temperature?: number;     // 0-1, sampling temperature
 }
 
-export type TranscriptionErrorCode = 'RATE_LIMIT' | 'FILE_TOO_LARGE' | 'NETWORK' | 'INVALID_API_KEY' | 'API_ERROR';
+export type TranscriptionErrorCode = 'RATE_LIMIT' | 'FILE_TOO_LARGE' | 'NETWORK' | 'INVALID_API_KEY' | 'API_ERROR' | 'UPLOAD_ERROR';
 
 export class TranscriptionError extends Error {
   code: TranscriptionErrorCode;
