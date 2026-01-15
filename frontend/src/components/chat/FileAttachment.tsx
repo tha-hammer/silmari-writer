@@ -1,26 +1,45 @@
 'use client'
 
 import { useState, useRef, DragEvent, ChangeEvent } from 'react'
-import { Paperclip, X, Upload } from 'lucide-react'
+import { Paperclip, X, Upload, FileAudio } from 'lucide-react'
 import { formatBytes } from '@/lib/utils'
 
 const DEFAULT_MAX_SIZE_BYTES = 10 * 1024 * 1024 // 10MB
 const DEFAULT_MAX_FILES = 10
 
+// Audio file MIME types supported by OpenAI Whisper
+const AUDIO_MIME_TYPES = [
+  'audio/mpeg',
+  'audio/mp3',
+  'audio/mp4',
+  'audio/x-m4a',
+  'audio/mpga',
+  'audio/wav',
+  'audio/wave',
+  'audio/x-wav',
+  'audio/webm',
+  'video/mp4',
+  'video/mpeg',
+  'video/webm',
+]
+
 interface FileAttachmentProps {
   onFilesChange: (files: File[]) => void
+  onTranscribeFile?: (file: File) => Promise<void>
   maxFiles?: number
   maxSizeBytes?: number
 }
 
 export default function FileAttachment({
   onFilesChange,
+  onTranscribeFile,
   maxFiles = DEFAULT_MAX_FILES,
   maxSizeBytes = DEFAULT_MAX_SIZE_BYTES,
 }: FileAttachmentProps) {
   const [files, setFiles] = useState<File[]>([])
   const [dragActive, setDragActive] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [transcribingFiles, setTranscribingFiles] = useState<Set<number>>(new Set())
   const inputRef = useRef<HTMLInputElement>(null)
 
   const validateAndAddFiles = (fileList: FileList | File[]) => {
@@ -105,6 +124,32 @@ export default function FileAttachment({
     onFilesChange(updatedFiles)
   }
 
+  const isAudioFile = (file: File): boolean => {
+    return AUDIO_MIME_TYPES.includes(file.type)
+  }
+
+  const handleTranscribe = async (file: File, index: number) => {
+    if (!onTranscribeFile) return
+
+    setTranscribingFiles(prev => new Set(prev).add(index))
+    setError(null)
+
+    try {
+      await onTranscribeFile(file)
+      // Remove file after successful transcription
+      removeFile(index)
+    } catch (err) {
+      setError(`Failed to transcribe ${file.name}`)
+      console.error('Transcription error:', err)
+    } finally {
+      setTranscribingFiles(prev => {
+        const next = new Set(prev)
+        next.delete(index)
+        return next
+      })
+    }
+  }
+
   return (
     <div className="space-y-2">
       {/* Drop zone */}
@@ -155,28 +200,51 @@ export default function FileAttachment({
       {/* File list */}
       {files.length > 0 && (
         <ul className="space-y-2">
-          {files.map((file, index) => (
-            <li
-              key={`${file.name}-${index}`}
-              className="flex items-center justify-between p-2 rounded-md bg-secondary/50"
-            >
-              <div className="flex items-center gap-2 min-w-0">
-                <Paperclip className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
-                <span className="truncate">{file.name}</span>
-                <span className="text-sm text-muted-foreground flex-shrink-0">
-                  {formatBytes(file.size)}
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => removeFile(index)}
-                aria-label={`Remove ${file.name}`}
-                className="p-1 rounded-md hover:bg-destructive/20 text-muted-foreground hover:text-destructive transition-colors"
+          {files.map((file, index) => {
+            const isAudio = isAudioFile(file)
+            const isTranscribing = transcribingFiles.has(index)
+
+            return (
+              <li
+                key={`${file.name}-${index}`}
+                className="flex items-center justify-between p-2 rounded-md bg-secondary/50"
               >
-                <X className="h-4 w-4" />
-              </button>
-            </li>
-          ))}
+                <div className="flex items-center gap-2 min-w-0">
+                  {isAudio ? (
+                    <FileAudio className="h-4 w-4 flex-shrink-0 text-primary" />
+                  ) : (
+                    <Paperclip className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+                  )}
+                  <span className="truncate">{file.name}</span>
+                  <span className="text-sm text-muted-foreground flex-shrink-0">
+                    {formatBytes(file.size)}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {isAudio && onTranscribeFile && (
+                    <button
+                      type="button"
+                      onClick={() => handleTranscribe(file, index)}
+                      disabled={isTranscribing}
+                      aria-label={`Transcribe ${file.name}`}
+                      className="px-3 py-1 text-sm rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      {isTranscribing ? 'Transcribing...' : 'Transcribe'}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => removeFile(index)}
+                    aria-label={`Remove ${file.name}`}
+                    disabled={isTranscribing}
+                    className="p-1 rounded-md hover:bg-destructive/20 text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              </li>
+            )
+          })}
         </ul>
       )}
     </div>

@@ -89,6 +89,24 @@ export default function HomePage() {
     }
   };
 
+  const handleTranscribeFile = async (file: File) => {
+    if (!activeProjectId) return;
+
+    setIsTranscribing(true);
+    setError(null);
+
+    try {
+      const text = await transcribeAudio(file);
+      await handleSendMessage(text);
+    } catch (err) {
+      setError(`Failed to transcribe ${file.name}. Please try again.`);
+      console.error('Failed to transcribe file:', err);
+      throw err; // Re-throw so FileAttachment can handle it
+    } finally {
+      setIsTranscribing(false);
+    }
+  };
+
   const handleNewProject = () => {
     const projectNumber = projects.length + 1;
     createProject(`New Project ${projectNumber}`);
@@ -147,7 +165,10 @@ export default function HomePage() {
                 />
                 <div className="mt-4 flex gap-4">
                   <div className="flex-1">
-                    <FileAttachment onFilesChange={setFiles} />
+                    <FileAttachment
+                      onFilesChange={setFiles}
+                      onTranscribeFile={handleTranscribeFile}
+                    />
                   </div>
                   <div className="flex-shrink-0">
                     <AudioRecorder
