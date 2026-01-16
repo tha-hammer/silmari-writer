@@ -1,0 +1,58 @@
+/**
+ * Message action handlers for ButtonRibbon operations
+ */
+
+import { Message } from './types';
+
+export interface RegenerateMessageOptions {
+  signal?: AbortSignal;
+}
+
+/**
+ * Regenerate an assistant message by re-sending the conversation context
+ * @param messageId - ID of the message to regenerate
+ * @param projectId - Active project ID
+ * @param messages - All messages in the conversation
+ * @param options - Optional AbortSignal for cancellation
+ * @returns New assistant message from API
+ */
+export async function regenerateMessage(
+  messageId: string,
+  projectId: string,
+  messages: Message[],
+  options?: RegenerateMessageOptions
+): Promise<Message> {
+  // 1. Find the message to regenerate
+  const messageIndex = messages.findIndex(m => m.id === messageId);
+  if (messageIndex === -1) {
+    throw new Error('Message not found');
+  }
+
+  // 2. Get context up to (but not including) this message
+  const context = messages.slice(0, messageIndex);
+
+  // 3. Find the last user message
+  const lastUserMessage = [...context].reverse().find(m => m.role === 'user');
+  if (!lastUserMessage) {
+    throw new Error('No user message found for regeneration');
+  }
+
+  // 4. Call API with context and abort signal
+  const response = await fetch('/api/generate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      projectId,
+      messages: context,
+      userMessage: lastUserMessage.content,
+    }),
+    signal: options?.signal, // Support cancellation
+  });
+
+  if (!response.ok) {
+    throw new Error('API call failed');
+  }
+
+  const data = await response.json();
+  return data.message;
+}
