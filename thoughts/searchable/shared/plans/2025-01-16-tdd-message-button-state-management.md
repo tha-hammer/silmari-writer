@@ -7,6 +7,28 @@ Implement per-message button state management in the Zustand store to support:
 
 The implementation prevents race conditions where multiple operations try to modify the same message simultaneously, while allowing operations on different messages to run in parallel.
 
+## Beads Tracking
+
+**Epic**: `silmari-writer-cxo` - Per-Message Button State Management
+
+### Implementation Tasks (9 Behaviors)
+
+| Behavior | Beads Issue | Description |
+|----------|-------------|-------------|
+| Behavior 1 | `silmari-writer-5vy` | Add Button State Type Definitions |
+| Behavior 2 | `silmari-writer-g6m` | Set Non-Blocking Copy Operation State |
+| Behavior 3 | `silmari-writer-3fb` | Clear Non-Blocking Copy Operation State |
+| Behavior 4 | `silmari-writer-3ns` | Start Blocking Operation |
+| Behavior 5 | `silmari-writer-9ul` | Complete Blocking Operation |
+| Behavior 6 | `silmari-writer-mqz` | Fail Blocking Operation |
+| Behavior 7 | `silmari-writer-u4l` | Check if Message is Blocked |
+| Behavior 8 | `silmari-writer-ege` | Message Isolation - Parallel Operations |
+| Behavior 9 | `silmari-writer-x03` | State Persistence with localStorage |
+
+**Dependency Chain**: Each behavior depends on the previous one (1→2→3→4→5→6→7→8→9)
+
+**Check Status**: `bd show silmari-writer-cxo` or `bd ready`
+
 ## Key Decisions Summary
 
 ✅ **Persistence Strategy**: Persist button states BUT clean up loading states on hydration
@@ -113,6 +135,8 @@ The implementation prevents race conditions where multiple operations try to mod
 ---
 
 ## Behavior 1: Add Button State Type Definitions
+
+**Beads**: `silmari-writer-5vy` | **Epic**: `silmari-writer-cxo`
 
 ### Test Specification
 **Given**: TypeScript definitions in types.ts
@@ -233,6 +257,8 @@ No refactoring needed - types are clean and well-documented.
 ---
 
 ## Behavior 2: Set Non-Blocking Copy Operation State
+
+**Beads**: `silmari-writer-g6m` | **Epic**: `silmari-writer-cxo` | **Depends on**: Behavior 1
 
 ### Test Specification
 **Given**: A message with no button state
@@ -408,6 +434,8 @@ No refactoring needed - implementation follows existing patterns in the store.
 
 ## Behavior 3: Clear Non-Blocking Copy Operation State
 
+**Beads**: `silmari-writer-3fb` | **Epic**: `silmari-writer-cxo` | **Depends on**: Behavior 2
+
 ### Test Specification
 **Given**: A message with active copy state
 **When**: `clearNonBlockingOperation(messageId, 'copy')` is called
@@ -532,6 +560,8 @@ clearNonBlockingOperation: (messageId, operation) => {
 ---
 
 ## Behavior 4: Start Blocking Operation
+
+**Beads**: `silmari-writer-3ns` | **Epic**: `silmari-writer-cxo` | **Depends on**: Behavior 3
 
 ### Test Specification
 **Given**: A message with no blocking operation
@@ -684,6 +714,8 @@ No refactoring needed - implementation is clean and minimal.
 
 ## Behavior 5: Complete Blocking Operation
 
+**Beads**: `silmari-writer-9ul` | **Epic**: `silmari-writer-cxo` | **Depends on**: Behavior 4
+
 ### Test Specification
 **Given**: A message with active blocking operation
 **When**: `completeBlockingOperation(messageId)` is called
@@ -822,6 +854,8 @@ completeBlockingOperation: (messageId) => {
 
 ## Behavior 6: Fail Blocking Operation
 
+**Beads**: `silmari-writer-mqz` | **Epic**: `silmari-writer-cxo` | **Depends on**: Behavior 5
+
 ### Test Specification
 **Given**: A message with active blocking operation
 **When**: `failBlockingOperation(messageId, error)` is called
@@ -958,6 +992,8 @@ No refactoring needed - implementation correctly handles edge cases.
 
 ## Behavior 7: Check if Message is Blocked
 
+**Beads**: `silmari-writer-u4l` | **Epic**: `silmari-writer-cxo` | **Depends on**: Behavior 6
+
 ### Test Specification
 **Given**: Messages with various states
 **When**: `isMessageBlocked(messageId)` is called
@@ -1062,6 +1098,8 @@ No refactoring needed - implementation is already optimal.
 ---
 
 ## Behavior 8: Message Isolation - Parallel Operations
+
+**Beads**: `silmari-writer-ege` | **Epic**: `silmari-writer-cxo` | **Depends on**: Behavior 7
 
 ### Test Specification
 **Given**: Multiple messages exist
@@ -1218,6 +1256,8 @@ No refactoring needed - the Record<string, MessageButtonState> structure inheren
 ---
 
 ## Behavior 9: State Persistence with localStorage
+
+**Beads**: `silmari-writer-x03` | **Epic**: `silmari-writer-cxo` | **Depends on**: Behavior 8
 
 ### Test Specification
 **Given**: Button states in the store
@@ -1483,59 +1523,70 @@ This behavior is out of scope for the current TDD plan but documented for future
 
 ## Implementation Checklist
 
-- [ ] Behavior 1: Type definitions
+**Epic Status**: `bd show silmari-writer-cxo` | **Ready Work**: `bd ready`
+
+- [ ] Behavior 1: Type definitions (`silmari-writer-5vy`)
   - [ ] Red: Write failing type tests
   - [ ] Green: Add types to types.ts
   - [ ] Refactor: N/A
   - [ ] Verify: `npm test -- types.test.ts` passes
+  - [ ] Update beads: `bd update silmari-writer-5vy --status=in_progress` → `bd close silmari-writer-5vy`
 
-- [ ] Behavior 2: Set non-blocking operation
+- [ ] Behavior 2: Set non-blocking operation (`silmari-writer-g6m`)
   - [ ] Red: Write failing tests
   - [ ] Green: Implement setNonBlockingOperation
   - [ ] Refactor: N/A
   - [ ] Verify: All tests pass
+  - [ ] Update beads: `bd update silmari-writer-g6m --status=in_progress` → `bd close silmari-writer-g6m`
 
-- [ ] Behavior 3: Clear non-blocking operation
+- [ ] Behavior 3: Clear non-blocking operation (`silmari-writer-3fb`)
   - [ ] Red: Write failing tests
   - [ ] Green: Implement clearNonBlockingOperation
   - [ ] Refactor: Add cleanup for empty states
   - [ ] Verify: All tests pass
+  - [ ] Update beads: `bd update silmari-writer-3fb --status=in_progress` → `bd close silmari-writer-3fb`
 
-- [ ] Behavior 4: Start blocking operation
+- [ ] Behavior 4: Start blocking operation (`silmari-writer-3ns`)
   - [ ] Red: Write failing tests
   - [ ] Green: Implement startBlockingOperation
   - [ ] Refactor: N/A
   - [ ] Verify: All tests pass
+  - [ ] Update beads: `bd update silmari-writer-3ns --status=in_progress` → `bd close silmari-writer-3ns`
 
-- [ ] Behavior 5: Complete blocking operation
+- [ ] Behavior 5: Complete blocking operation (`silmari-writer-9ul`)
   - [ ] Red: Write failing tests
   - [ ] Green: Implement completeBlockingOperation
   - [ ] Refactor: Add cleanup for empty states
   - [ ] Verify: All tests pass
+  - [ ] Update beads: `bd update silmari-writer-9ul --status=in_progress` → `bd close silmari-writer-9ul`
 
-- [ ] Behavior 6: Fail blocking operation
+- [ ] Behavior 6: Fail blocking operation (`silmari-writer-mqz`)
   - [ ] Red: Write failing tests
   - [ ] Green: Implement failBlockingOperation
   - [ ] Refactor: N/A
   - [ ] Verify: All tests pass
+  - [ ] Update beads: `bd update silmari-writer-mqz --status=in_progress` → `bd close silmari-writer-mqz`
 
-- [ ] Behavior 7: Check if blocked
+- [ ] Behavior 7: Check if blocked (`silmari-writer-u4l`)
   - [ ] Red: Write failing tests
   - [ ] Green: Implement isMessageBlocked
   - [ ] Refactor: N/A
   - [ ] Verify: All tests pass
+  - [ ] Update beads: `bd update silmari-writer-u4l --status=in_progress` → `bd close silmari-writer-u4l`
 
-- [ ] Behavior 8: Message isolation
+- [ ] Behavior 8: Message isolation (`silmari-writer-ege`)
   - [ ] Red: Write failing tests (should pass immediately)
   - [ ] Green: N/A (existing implementation)
   - [ ] Refactor: N/A
   - [ ] Verify: All tests pass
+  - [ ] Update beads: `bd update silmari-writer-ege --status=in_progress` → `bd close silmari-writer-ege`
 
-- [ ] Behavior 9: Persistence
+- [ ] Behavior 9: Persistence (`silmari-writer-x03`)
   - [ ] Red: Write failing tests
   - [ ] Green: N/A or add partialize/cleanup
-  - [ ] Refactor: Decide on persistence strategy
+  - [ ] Refactor: Implement onRehydrateStorage cleanup
   - [ ] Verify: All tests pass
+  - [ ] Update beads: `bd update silmari-writer-x03 --status=in_progress` → `bd close silmari-writer-x03`
 
 - [ ] Final Verification
   - [ ] All tests pass: `npm test`
@@ -1543,6 +1594,7 @@ This behavior is out of scope for the current TDD plan but documented for future
   - [ ] Linting passes: `npm run lint`
   - [ ] Test coverage for button state ≥90%
   - [ ] No console warnings or errors
+  - [ ] Close epic: `bd close silmari-writer-cxo`
 
 ---
 
