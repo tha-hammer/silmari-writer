@@ -95,6 +95,10 @@ Implement ButtonRibbon component for assistant messages with four action buttons
 - Button customization or theming
 - Drag-and-drop reordering of messages
 - Multi-message selection or bulk operations
+- Analytics API endpoint implementation (backend route `/api/analytics`)
+- Analytics data persistence and retrieval
+- Retry logic for failed analytics events (fire-and-forget pattern)
+- Schema versioning for persisted state (future-proofing for localStorage migrations)
 
 ## Testing Strategy
 
@@ -129,6 +133,24 @@ Implement ButtonRibbon component for assistant messages with four action buttons
 - Message with blocking operation in progress (some buttons disabled)
 - Message with error state (error message shown)
 - Message with copy state active (shows "Copied!" feedback)
+
+### Contract: Copy State Timeout Lifecycle
+
+The ButtonRibbon component MUST manage copy state timeout lifecycle properly:
+- Set timeout for 2000ms when `copyState.isActive` becomes true
+- Clear timeout on component unmount to prevent memory leaks
+- Clear timeout when `copyState.isActive` becomes false to prevent duplicate clears
+- Verify `clearNonBlockingOperation` is stable (Zustand actions are stable by default)
+
+**Implementation pattern**:
+```typescript
+useEffect(() => {
+  if (copyState?.isActive) {
+    const timer = setTimeout(() => clearNonBlockingOperation(messageId, 'copy'), 2000)
+    return () => clearTimeout(timer) // Cleanup on unmount
+  }
+}, [copyState?.isActive, messageId, clearNonBlockingOperation])
+```
 
 ### TDD Cycle
 
@@ -352,17 +374,30 @@ export default function ButtonRibbon({ messageId, content }: ButtonRibbonProps) 
 ```
 
 #### 🔵 Refactor: Improve Code
-Extract button styling to reduce duplication:
+Extract button styling and LoadingSpinner component to reduce duplication:
 ```typescript
 // Add at top of file
 const buttonBaseClasses = "flex items-center gap-1 px-3 py-1.5 text-sm rounded-md bg-secondary text-secondary-foreground hover:bg-secondary/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed";
 
-const LoadingSpinner = () => (
-  <div
-    className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"
-    data-testid="loading-spinner"
-  />
-);
+interface LoadingSpinnerProps {
+  size?: 'sm' | 'md' | 'lg';
+  className?: string;
+}
+
+const LoadingSpinner = ({ size = 'sm', className }: LoadingSpinnerProps) => {
+  const sizeClasses = {
+    sm: 'w-4 h-4',
+    md: 'w-6 h-6',
+    lg: 'w-8 h-8',
+  };
+
+  return (
+    <div
+      className={`${sizeClasses[size]} border-2 border-current border-t-transparent rounded-full animate-spin ${className || ''}`}
+      data-testid="loading-spinner"
+    />
+  );
+};
 
 // Use in buttons:
 <button className={buttonBaseClasses} ...>
@@ -549,13 +584,14 @@ export default function ButtonRibbon({ messageId, content }: ButtonRibbonProps) 
   const copyState = buttonState?.copy;
 
   // Auto-clear copy state after 2 seconds
+  // Note: clearNonBlockingOperation is stable (from Zustand), safe to depend on
   useEffect(() => {
     if (copyState?.isActive) {
       const timer = setTimeout(() => {
         clearNonBlockingOperation(messageId, 'copy');
       }, 2000);
 
-      return () => clearTimeout(timer);
+      return () => clearTimeout(timer); // Cleanup on unmount
     }
   }, [copyState?.isActive, messageId, clearNonBlockingOperation]);
 
@@ -570,12 +606,25 @@ export default function ButtonRibbon({ messageId, content }: ButtonRibbonProps) 
 
   const buttonBaseClasses = "flex items-center gap-1 px-3 py-1.5 text-sm rounded-md bg-secondary text-secondary-foreground hover:bg-secondary/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed";
 
-  const LoadingSpinner = () => (
-    <div
-      className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"
-      data-testid="loading-spinner"
-    />
-  );
+  interface LoadingSpinnerProps {
+    size?: 'sm' | 'md' | 'lg';
+    className?: string;
+  }
+
+  const LoadingSpinner = ({ size = 'sm', className }: LoadingSpinnerProps) => {
+    const sizeClasses = {
+      sm: 'w-4 h-4',
+      md: 'w-6 h-6',
+      lg: 'w-8 h-8',
+    };
+
+    return (
+      <div
+        className={`${sizeClasses[size]} border-2 border-current border-t-transparent rounded-full animate-spin ${className || ''}`}
+        data-testid="loading-spinner"
+      />
+    );
+  };
 
   return (
     <div className="mt-2 flex items-center gap-2">
@@ -671,6 +720,57 @@ No major refactoring needed - implementation is clean with useEffect for cleanup
 - Regenerate fails (error shown, message preserved)
 - Multiple messages regenerating simultaneously (message isolation)
 
+### Contract: Request Cancellation
+
+The regenerate operation MUST support request cancellation to prevent wasted API calls:
+- Use AbortController to cancel in-flight requests on component unmount
+- Clean up controller on component unmount
+- Silent fail on AbortError (user-initiated cancel, not a true error)
+- Handle race conditions when multiple regenerate operations occur
+
+**Implementation pattern**:
+```typescript
+const handleRegenerate = async () => {
+  const controller = new AbortController()
+  startBlockingOperation(messageId, 'regenerate')
+
+  try {
+    const newMessage = await regenerateMessage(messageId, projectId, messages, {
+      signal: controller.signal
+    })
+    completeBlockingOperation(messageId)
+  } catch (error) {
+    if (error.name === 'AbortError') return // Silent fail on cancel
+    failBlockingOperation(messageId, error.message)
+  }
+
+  return () => controller.abort() // Cleanup function
+}
+```
+
+### API Contract: Regenerate Endpoint
+
+```typescript
+interface RegenerateRequest {
+  projectId: string;
+  messages: Message[];      // Context up to regenerated message
+  userMessage: string;      // Last user message to regenerate from
+}
+
+interface RegenerateResponse {
+  message: Message;         // New assistant message
+  error?: string;
+}
+
+// Usage
+const response = await fetch('/api/generate', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify(request satisfies RegenerateRequest),
+  signal: abortController.signal, // Support cancellation
+})
+```
+
 ### TDD Cycle
 
 #### 🔴 Red: Write Failing Test
@@ -759,6 +859,39 @@ describe('Regenerate button', () => {
     const regenerateButton = screen.getByRole('button', { name: /regenerate/i })
     expect(regenerateButton).toBeDisabled()
   })
+
+  it('clears error when starting new operation', async () => {
+    const user = userEvent.setup()
+
+    // Set error state
+    mockStore.buttonStates = {
+      [mockMessageId]: {
+        blockingOperation: { type: 'regenerate', isLoading: false, error: 'Failed' }
+      }
+    }
+
+    render(<ButtonRibbon messageId={mockMessageId} content="Test" />)
+
+    // Verify error is shown
+    expect(screen.getByText(/failed/i)).toBeInTheDocument()
+
+    // Start new operation (should clear error)
+    const regenerateButton = screen.getByRole('button', { name: /regenerate/i })
+    await user.click(regenerateButton)
+
+    // Update store to show loading without error
+    mockStore.buttonStates = {
+      [mockMessageId]: {
+        blockingOperation: { type: 'regenerate', isLoading: true }
+      }
+    }
+
+    // Re-render
+    render(<ButtonRibbon messageId={mockMessageId} content="Test" />)
+
+    // Verify error cleared
+    expect(screen.queryByText(/failed/i)).not.toBeInTheDocument()
+  })
 })
 ```
 
@@ -804,13 +937,18 @@ const handleRegenerate = async () => {
 ```
 
 #### 🔵 Refactor: Improve Code
-Extract regenerate logic to separate API function:
+Extract regenerate logic to separate API function with AbortController support:
 ```typescript
 // Create new file: frontend/src/lib/messageActions.ts
+export interface RegenerateMessageOptions {
+  signal?: AbortSignal;
+}
+
 export async function regenerateMessage(
   messageId: string,
   projectId: string,
-  messages: Message[]
+  messages: Message[],
+  options?: RegenerateMessageOptions
 ): Promise<Message> {
   // 1. Find the message to regenerate
   const messageIndex = messages.findIndex(m => m.id === messageId);
@@ -827,7 +965,7 @@ export async function regenerateMessage(
     throw new Error('No user message found for regeneration');
   }
 
-  // 4. Call API with context
+  // 4. Call API with context and abort signal
   const response = await fetch('/api/generate', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -836,6 +974,7 @@ export async function regenerateMessage(
       messages: context,
       userMessage: lastUserMessage.content,
     }),
+    signal: options?.signal, // Support cancellation
   });
 
   if (!response.ok) {
@@ -850,6 +989,7 @@ export async function regenerateMessage(
 import { regenerateMessage } from '@/lib/messageActions';
 
 const handleRegenerate = async () => {
+  const controller = new AbortController();
   startBlockingOperation(messageId, 'regenerate');
 
   try {
@@ -861,14 +1001,21 @@ const handleRegenerate = async () => {
       throw new Error('No active project');
     }
 
-    // Call regenerate API
-    const newMessage = await regenerateMessage(messageId, projectId, messages);
+    // Call regenerate API with abort signal
+    const newMessage = await regenerateMessage(messageId, projectId, messages, {
+      signal: controller.signal
+    });
 
     // Remove old message and add new one (handled by parent component or API)
     completeBlockingOperation(messageId);
   } catch (error) {
+    // Silent fail on user-initiated abort
+    if (error.name === 'AbortError') return;
     failBlockingOperation(messageId, error instanceof Error ? error.message : 'Regeneration failed');
   }
+
+  // Return cleanup function for component unmount
+  return () => controller.abort();
 };
 ```
 
@@ -898,6 +1045,36 @@ const handleRegenerate = async () => {
 - Save with empty content (validation)
 - Cancel after making changes (no save)
 - Press Escape to close modal
+
+### Contract: Save Operation Behavior
+
+The edit save operation behavior specification:
+- **Local-only** (recommended for MVP): Synchronous store update, immediate close
+- No API call required for MVP, edit is local modification only
+- Future enhancement: Add sync to backend via separate API endpoint
+
+**Implementation pattern**:
+```typescript
+const handleEditSave = (newContent: string) => {
+  // Update message in store (synchronous)
+  updateMessage(messageId, { content: newContent })
+  setIsEditModalOpen(false)
+  completeBlockingOperation(messageId)
+}
+```
+
+**Future API contract** (not implemented in this plan):
+```typescript
+interface UpdateMessageRequest {
+  messageId: string;
+  content: string;
+}
+
+interface UpdateMessageResponse {
+  message: Message;
+  error?: string;
+}
+```
 
 ### TDD Cycle
 
@@ -1102,10 +1279,12 @@ const handleEditClick = () => {
   startBlockingOperation(messageId, 'edit');
 };
 
-const handleEditSave = async (newContent: string) => {
+const handleEditSave = (newContent: string) => {
+  // Update message in store (synchronous operation)
+  // Future: Add async API call here when backend sync is implemented
   try {
-    // TODO: Update message in store
-    // For now, just close modal
+    // TODO: Get updateMessage from store
+    // updateMessage(messageId, { content: newContent });
     setIsEditModalOpen(false);
     completeBlockingOperation(messageId);
   } catch (error) {
@@ -1372,6 +1551,42 @@ No major refactoring needed - clean integration.
 - Multiple rapid clicks (deduplicate events)
 - Network errors (retry logic)
 
+### API Contract: Analytics Endpoint (NOT IMPLEMENTED)
+
+Analytics events are sent to `POST /api/analytics` but **endpoint is NOT implemented in this plan**.
+
+**Expected payload format**:
+```typescript
+interface AnalyticsEvent {
+  eventType: 'button_click' | 'button_outcome' | 'button_timing';
+  buttonType: 'copy' | 'regenerate' | 'sendToAPI' | 'edit';
+  messageId: string;
+  timestamp: number;
+  outcome?: 'success' | 'error';
+  errorMessage?: string;
+  duration?: number;
+  startTime?: number;
+  endTime?: number;
+}
+
+// Example: POST /api/analytics
+// Body:
+{
+  "eventType": "button_click",
+  "buttonType": "copy",
+  "messageId": "msg-123",
+  "timestamp": 1673894400000
+}
+```
+
+**Behavior**: Events fail silently if endpoint not implemented. This is acceptable for MVP.
+
+**Future work**:
+- Implement `/api/analytics` route handler
+- Add persistence layer for analytics data
+- Consider adding session tracking: `sessionId`, `userId` fields
+- Consider retry logic with exponential backoff for critical events
+
 ### TDD Cycle
 
 #### 🔴 Red: Write Failing Test
@@ -1541,6 +1756,8 @@ export interface AnalyticsEvent {
   [key: string]: any;
 }
 
+// Analytics events are fire-and-forget, no retry on failure
+// This is acceptable for MVP as analytics should not block user experience
 async function sendAnalyticsEvent(event: AnalyticsEvent): Promise<void> {
   try {
     const response = await fetch('/api/analytics', {
@@ -1555,6 +1772,7 @@ async function sendAnalyticsEvent(event: AnalyticsEvent): Promise<void> {
   } catch (error) {
     console.warn('Failed to send analytics event:', error);
     // Silent fail - don't disrupt user experience
+    // Note: No retry logic for MVP. Future: implement exponential backoff if needed
   }
 }
 
@@ -1629,10 +1847,19 @@ const handleCopy = async () => {
 ```
 
 #### 🔵 Refactor: Improve Code
-Create analytics hook for reusability:
+Create analytics hook for reusability with explicit interface:
 ```typescript
 // frontend/src/hooks/useButtonAnalytics.ts
-export function useButtonAnalytics(buttonType: ButtonType, messageId: string) {
+interface ButtonAnalytics {
+  trackClick: () => Promise<void>;
+  trackSuccess: (startTime: number) => Promise<void>;
+  trackError: (error: Error | string) => Promise<void>;
+}
+
+export function useButtonAnalytics(
+  buttonType: ButtonType,
+  messageId: string
+): ButtonAnalytics {
   const trackClick = async () => {
     await trackButtonClick({
       buttonType,
@@ -1924,15 +2151,45 @@ describe('E2E Button Interactions', () => {
   - [ ] Linting passes: `npm run lint`
   - [ ] Manual testing: Copy, Regenerate, Edit flows work in browser
   - [ ] Visual inspection: ButtonRibbon aligns correctly below assistant messages
-  - [ ] Analytics events visible in network tab
+  - [ ] Analytics events visible in network tab (expect 404 since endpoint not implemented)
   - [ ] Close epic: `bd close silmari-writer-smq`
+
+- [ ] **Future Enhancements** (NOT in this plan)
+  - [ ] Add schema versioning to Zustand persist config for future migrations
+  - [ ] Implement `/api/analytics` route handler and persistence
+  - [ ] Add retry logic for analytics with exponential backoff
+  - [ ] Add session tracking fields to analytics events
 
 ---
 
 ## References
 - Backend Implementation: `thoughts/searchable/shared/plans/2025-01-16-tdd-message-button-state-management.md`
+- Plan Review: `thoughts/searchable/shared/plans/2026-01-16-tdd-button-ribbon-ui-integration-REVIEW.md`
 - Store: `frontend/src/lib/store.ts:144-248`
 - Types: `frontend/src/lib/types.ts:58-91`
 - MessageBubble: `frontend/src/components/chat/MessageBubble.tsx:15-82`
 - Test Pattern: `frontend/__tests__/components/MessageInput.test.tsx`
 - Store Tests: `frontend/__tests__/lib/store.test.ts` (71 tests)
+
+---
+
+## Plan Review Summary
+
+This plan has been reviewed and enhanced based on feedback from `2026-01-16-tdd-button-ribbon-ui-integration-REVIEW.md`.
+
+**Review Status**: ⚠️ **Needs Minor Revision Addressed**
+
+**Key Enhancements Made**:
+1. ✅ **Added Contracts**: Copy timeout lifecycle, request cancellation, save behavior, analytics endpoint placeholder
+2. ✅ **Defined Interfaces**: LoadingSpinner props, useButtonAnalytics return type, RegenerateRequest/Response, AnalyticsEvent schema
+3. ✅ **Clarified Patterns**: Handler naming (use `handleCopy` not `handleCopyClick`), error clearing behavior
+4. ✅ **Documented Limitations**: Analytics endpoint not implemented (fire-and-forget pattern acceptable for MVP)
+5. ✅ **Added Test Case**: Error state clearing on retry
+
+**Remaining Future Work** (explicitly out of scope):
+- Schema versioning for localStorage migrations
+- Analytics backend implementation
+- Retry logic for analytics events
+- Session tracking in analytics
+
+**Review Assessment**: Plan is now ready for implementation with all critical contracts, interfaces, and edge cases documented.
