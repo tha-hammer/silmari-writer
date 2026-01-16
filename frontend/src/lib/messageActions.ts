@@ -11,14 +11,14 @@ export interface RegenerateMessageOptions {
 /**
  * Regenerate an assistant message by re-sending the conversation context
  * @param messageId - ID of the message to regenerate
- * @param projectId - Active project ID
+ * @param _projectId - Active project ID (unused, kept for API compatibility)
  * @param messages - All messages in the conversation
  * @param options - Optional AbortSignal for cancellation
  * @returns New assistant message from API
  */
 export async function regenerateMessage(
   messageId: string,
-  projectId: string,
+  _projectId: string,
   messages: Message[],
   options?: RegenerateMessageOptions
 ): Promise<Message> {
@@ -38,13 +38,13 @@ export async function regenerateMessage(
   }
 
   // 4. Call API with context and abort signal
+  // API expects: { message: string, history: Message[] }
   const response = await fetch('/api/generate', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      projectId,
-      messages: context,
-      userMessage: lastUserMessage.content,
+      message: lastUserMessage.content,
+      history: context,
     }),
     signal: options?.signal, // Support cancellation
   });
@@ -54,5 +54,14 @@ export async function regenerateMessage(
   }
 
   const data = await response.json();
-  return data.message;
+
+  // API returns { content: string }, construct a Message object
+  const newMessage: Message = {
+    id: crypto.randomUUID(),
+    role: 'assistant',
+    content: data.content,
+    timestamp: new Date(),
+  };
+
+  return newMessage;
 }
