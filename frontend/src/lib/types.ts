@@ -54,3 +54,38 @@ export interface Message {
   attachments?: Attachment[];
   isVoiceTranscription?: boolean; // Indicates message originated from voice transcription
 }
+
+/**
+ * Non-blocking operation types (can run alongside blocking operations)
+ */
+export type NonBlockingOperationType = 'copy';
+
+/**
+ * Button operation types (mutually exclusive per message)
+ */
+export type BlockingOperationType = 'regenerate' | 'sendToAPI' | 'edit';
+
+/**
+ * State for non-blocking copy operation
+ */
+export interface CopyState {
+  isActive: boolean;
+  timestamp: number;
+}
+
+/**
+ * State for blocking operations (mutually exclusive)
+ */
+export interface BlockingOperationState {
+  type: BlockingOperationType;
+  isLoading: boolean;
+  error?: string;
+}
+
+/**
+ * Per-message button state tracking
+ */
+export interface MessageButtonState {
+  copy?: CopyState;
+  blockingOperation?: BlockingOperationState;
+}

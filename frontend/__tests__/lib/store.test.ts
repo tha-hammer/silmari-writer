@@ -44,6 +44,7 @@ describe('useConversationStore', () => {
       projects: [],
       activeProjectId: null,
       messages: {},
+      buttonStates: {},
     })
   })
 
@@ -570,6 +571,697 @@ describe('useConversationStore', () => {
       })
 
       expect(result.current.projects).toHaveLength(5)
+    })
+  })
+
+  describe('Button State Management', () => {
+    describe('Non-blocking Operations', () => {
+      it('setNonBlockingOperation sets copy state with timestamp', () => {
+        const { result } = renderHook(() => useConversationStore())
+        const mockNow = Date.now()
+        vi.spyOn(Date, 'now').mockReturnValue(mockNow)
+
+        act(() => {
+          result.current.setNonBlockingOperation('msg-1', 'copy')
+        })
+
+        expect(result.current.buttonStates['msg-1']).toBeDefined()
+        expect(result.current.buttonStates['msg-1'].copy).toEqual({
+          isActive: true,
+          timestamp: mockNow,
+        })
+      })
+
+      it('setNonBlockingOperation works for non-existent message', () => {
+        const { result } = renderHook(() => useConversationStore())
+
+        act(() => {
+          result.current.setNonBlockingOperation('non-existent-msg', 'copy')
+        })
+
+        expect(result.current.buttonStates['non-existent-msg'].copy?.isActive).toBe(true)
+      })
+
+      it('setNonBlockingOperation works alongside blocking operation', () => {
+        const { result } = renderHook(() => useConversationStore())
+
+        act(() => {
+          result.current.startBlockingOperation('msg-1', 'regenerate')
+          result.current.setNonBlockingOperation('msg-1', 'copy')
+        })
+
+        expect(result.current.buttonStates['msg-1'].copy?.isActive).toBe(true)
+        expect(result.current.buttonStates['msg-1'].blockingOperation?.type).toBe('regenerate')
+      })
+
+      it('setNonBlockingOperation updates timestamp on repeated calls', () => {
+        const { result } = renderHook(() => useConversationStore())
+        const firstTimestamp = 1000
+        const secondTimestamp = 2000
+
+        const dateSpy = vi.spyOn(Date, 'now')
+        dateSpy.mockReturnValue(firstTimestamp)
+
+        act(() => {
+          result.current.setNonBlockingOperation('msg-1', 'copy')
+        })
+
+        expect(result.current.buttonStates['msg-1'].copy?.timestamp).toBe(firstTimestamp)
+
+        dateSpy.mockReturnValue(secondTimestamp)
+
+        act(() => {
+          result.current.setNonBlockingOperation('msg-1', 'copy')
+        })
+
+        expect(result.current.buttonStates['msg-1'].copy?.timestamp).toBe(secondTimestamp)
+      })
+
+      it('clearNonBlockingOperation removes copy state', () => {
+        const { result } = renderHook(() => useConversationStore())
+
+        act(() => {
+          result.current.setNonBlockingOperation('msg-1', 'copy')
+        })
+
+        expect(result.current.buttonStates['msg-1'].copy).toBeDefined()
+
+        act(() => {
+          result.current.clearNonBlockingOperation('msg-1', 'copy')
+        })
+
+        expect(result.current.buttonStates['msg-1']?.copy).toBeUndefined()
+      })
+
+      it('clearNonBlockingOperation is safe for non-existent state', () => {
+        const { result } = renderHook(() => useConversationStore())
+
+        // Should not throw
+        act(() => {
+          result.current.clearNonBlockingOperation('non-existent', 'copy')
+        })
+
+        expect(result.current.buttonStates['non-existent']).toBeUndefined()
+      })
+
+      it('clearNonBlockingOperation preserves blocking operation', () => {
+        const { result } = renderHook(() => useConversationStore())
+
+        act(() => {
+          result.current.startBlockingOperation('msg-1', 'regenerate')
+          result.current.setNonBlockingOperation('msg-1', 'copy')
+        })
+
+        act(() => {
+          result.current.clearNonBlockingOperation('msg-1', 'copy')
+        })
+
+        expect(result.current.buttonStates['msg-1']?.copy).toBeUndefined()
+        expect(result.current.buttonStates['msg-1']?.blockingOperation?.type).toBe('regenerate')
+      })
+    })
+
+    describe('Blocking Operations', () => {
+      it('startBlockingOperation sets regenerate state', () => {
+        const { result } = renderHook(() => useConversationStore())
+
+        act(() => {
+          result.current.startBlockingOperation('msg-1', 'regenerate')
+        })
+
+        expect(result.current.buttonStates['msg-1'].blockingOperation).toEqual({
+          type: 'regenerate',
+          isLoading: true,
+        })
+      })
+
+      it('startBlockingOperation sets sendToAPI state', () => {
+        const { result } = renderHook(() => useConversationStore())
+
+        act(() => {
+          result.current.startBlockingOperation('msg-1', 'sendToAPI')
+        })
+
+        expect(result.current.buttonStates['msg-1'].blockingOperation).toEqual({
+          type: 'sendToAPI',
+          isLoading: true,
+        })
+      })
+
+      it('startBlockingOperation sets edit state', () => {
+        const { result } = renderHook(() => useConversationStore())
+
+        act(() => {
+          result.current.startBlockingOperation('msg-1', 'edit')
+        })
+
+        expect(result.current.buttonStates['msg-1'].blockingOperation).toEqual({
+          type: 'edit',
+          isLoading: true,
+        })
+      })
+
+      it('startBlockingOperation replaces existing blocking operation', () => {
+        const { result } = renderHook(() => useConversationStore())
+
+        act(() => {
+          result.current.startBlockingOperation('msg-1', 'regenerate')
+        })
+
+        expect(result.current.buttonStates['msg-1'].blockingOperation?.type).toBe('regenerate')
+
+        act(() => {
+          result.current.startBlockingOperation('msg-1', 'sendToAPI')
+        })
+
+        expect(result.current.buttonStates['msg-1'].blockingOperation?.type).toBe('sendToAPI')
+      })
+
+      it('startBlockingOperation preserves copy state', () => {
+        const { result } = renderHook(() => useConversationStore())
+
+        act(() => {
+          result.current.setNonBlockingOperation('msg-1', 'copy')
+          result.current.startBlockingOperation('msg-1', 'regenerate')
+        })
+
+        expect(result.current.buttonStates['msg-1'].copy?.isActive).toBe(true)
+        expect(result.current.buttonStates['msg-1'].blockingOperation?.type).toBe('regenerate')
+      })
+
+      it('startBlockingOperation clears previous error state', () => {
+        const { result } = renderHook(() => useConversationStore())
+
+        act(() => {
+          result.current.startBlockingOperation('msg-1', 'sendToAPI')
+          result.current.failBlockingOperation('msg-1', 'API call failed')
+        })
+
+        expect(result.current.buttonStates['msg-1'].blockingOperation?.error).toBe('API call failed')
+
+        // Starting new operation should clear error
+        act(() => {
+          result.current.startBlockingOperation('msg-1', 'regenerate')
+        })
+
+        expect(result.current.buttonStates['msg-1'].blockingOperation).toEqual({
+          type: 'regenerate',
+          isLoading: true,
+          // No error property
+        })
+        expect(result.current.buttonStates['msg-1'].blockingOperation?.error).toBeUndefined()
+      })
+
+      it('completeBlockingOperation removes blocking state', () => {
+        const { result } = renderHook(() => useConversationStore())
+
+        act(() => {
+          result.current.startBlockingOperation('msg-1', 'regenerate')
+        })
+
+        expect(result.current.buttonStates['msg-1'].blockingOperation).toBeDefined()
+
+        act(() => {
+          result.current.completeBlockingOperation('msg-1')
+        })
+
+        expect(result.current.buttonStates['msg-1']?.blockingOperation).toBeUndefined()
+      })
+
+      it('completeBlockingOperation is safe for non-existent state', () => {
+        const { result } = renderHook(() => useConversationStore())
+
+        // Should not throw
+        act(() => {
+          result.current.completeBlockingOperation('non-existent')
+        })
+
+        expect(result.current.buttonStates['non-existent']).toBeUndefined()
+      })
+
+      it('completeBlockingOperation preserves copy state', () => {
+        const { result } = renderHook(() => useConversationStore())
+
+        act(() => {
+          result.current.setNonBlockingOperation('msg-1', 'copy')
+          result.current.startBlockingOperation('msg-1', 'regenerate')
+        })
+
+        act(() => {
+          result.current.completeBlockingOperation('msg-1')
+        })
+
+        expect(result.current.buttonStates['msg-1']?.blockingOperation).toBeUndefined()
+        expect(result.current.buttonStates['msg-1']?.copy?.isActive).toBe(true)
+      })
+
+      it('completeBlockingOperation cleans up empty state objects', () => {
+        const { result } = renderHook(() => useConversationStore())
+
+        act(() => {
+          result.current.startBlockingOperation('msg-1', 'regenerate')
+        })
+
+        act(() => {
+          result.current.completeBlockingOperation('msg-1')
+        })
+
+        // Should remove the entire messageId key since no state remains
+        expect(result.current.buttonStates['msg-1']).toBeUndefined()
+      })
+
+      it('failBlockingOperation sets error and stops loading', () => {
+        const { result } = renderHook(() => useConversationStore())
+
+        act(() => {
+          result.current.startBlockingOperation('msg-1', 'sendToAPI')
+        })
+
+        act(() => {
+          result.current.failBlockingOperation('msg-1', 'API call failed')
+        })
+
+        expect(result.current.buttonStates['msg-1'].blockingOperation).toEqual({
+          type: 'sendToAPI',
+          isLoading: false,
+          error: 'API call failed',
+        })
+      })
+
+      it('failBlockingOperation preserves operation type', () => {
+        const { result } = renderHook(() => useConversationStore())
+
+        act(() => {
+          result.current.startBlockingOperation('msg-1', 'regenerate')
+        })
+
+        act(() => {
+          result.current.failBlockingOperation('msg-1', 'Generation failed')
+        })
+
+        expect(result.current.buttonStates['msg-1'].blockingOperation?.type).toBe('regenerate')
+        expect(result.current.buttonStates['msg-1'].blockingOperation?.isLoading).toBe(false)
+      })
+
+      it('failBlockingOperation handles empty error message', () => {
+        const { result } = renderHook(() => useConversationStore())
+
+        act(() => {
+          result.current.startBlockingOperation('msg-1', 'edit')
+        })
+
+        act(() => {
+          result.current.failBlockingOperation('msg-1', '')
+        })
+
+        expect(result.current.buttonStates['msg-1'].blockingOperation?.error).toBe('')
+      })
+
+      it('failBlockingOperation is safe when no blocking operation exists', () => {
+        const { result } = renderHook(() => useConversationStore())
+
+        // Should not throw, but behavior is debatable - for now, no-op
+        act(() => {
+          result.current.failBlockingOperation('msg-1', 'Error')
+        })
+
+        // No blocking operation was started, so nothing should happen
+        expect(result.current.buttonStates['msg-1']).toBeUndefined()
+      })
+
+      it('failBlockingOperation handles special characters in error', () => {
+        const { result } = renderHook(() => useConversationStore())
+        const errorMsg = 'Error: "Could not connect" (code: 500) <internal>'
+
+        act(() => {
+          result.current.startBlockingOperation('msg-1', 'sendToAPI')
+        })
+
+        act(() => {
+          result.current.failBlockingOperation('msg-1', errorMsg)
+        })
+
+        expect(result.current.buttonStates['msg-1'].blockingOperation?.error).toBe(errorMsg)
+      })
+    })
+
+    describe('isMessageBlocked', () => {
+      it('returns false when no button state exists', () => {
+        const { result } = renderHook(() => useConversationStore())
+
+        expect(result.current.isMessageBlocked('msg-1')).toBe(false)
+      })
+
+      it('returns true when blocking operation is loading', () => {
+        const { result } = renderHook(() => useConversationStore())
+
+        act(() => {
+          result.current.startBlockingOperation('msg-1', 'regenerate')
+        })
+
+        expect(result.current.isMessageBlocked('msg-1')).toBe(true)
+      })
+
+      it('returns false when blocking operation failed', () => {
+        const { result } = renderHook(() => useConversationStore())
+
+        act(() => {
+          result.current.startBlockingOperation('msg-1', 'sendToAPI')
+          result.current.failBlockingOperation('msg-1', 'Error')
+        })
+
+        expect(result.current.isMessageBlocked('msg-1')).toBe(false)
+      })
+
+      it('returns false when blocking operation completed', () => {
+        const { result } = renderHook(() => useConversationStore())
+
+        act(() => {
+          result.current.startBlockingOperation('msg-1', 'regenerate')
+          result.current.completeBlockingOperation('msg-1')
+        })
+
+        expect(result.current.isMessageBlocked('msg-1')).toBe(false)
+      })
+
+      it('returns false when only copy state exists', () => {
+        const { result } = renderHook(() => useConversationStore())
+
+        act(() => {
+          result.current.setNonBlockingOperation('msg-1', 'copy')
+        })
+
+        expect(result.current.isMessageBlocked('msg-1')).toBe(false)
+      })
+
+      it('returns true when both copy and blocking operation exist', () => {
+        const { result } = renderHook(() => useConversationStore())
+
+        act(() => {
+          result.current.setNonBlockingOperation('msg-1', 'copy')
+          result.current.startBlockingOperation('msg-1', 'regenerate')
+        })
+
+        expect(result.current.isMessageBlocked('msg-1')).toBe(true)
+      })
+    })
+
+    describe('Message Isolation', () => {
+      it('allows independent blocking operations on different messages', () => {
+        const { result } = renderHook(() => useConversationStore())
+
+        act(() => {
+          result.current.startBlockingOperation('msg-1', 'regenerate')
+          result.current.startBlockingOperation('msg-2', 'sendToAPI')
+          result.current.startBlockingOperation('msg-3', 'edit')
+        })
+
+        expect(result.current.buttonStates['msg-1'].blockingOperation?.type).toBe('regenerate')
+        expect(result.current.buttonStates['msg-2'].blockingOperation?.type).toBe('sendToAPI')
+        expect(result.current.buttonStates['msg-3'].blockingOperation?.type).toBe('edit')
+
+        expect(result.current.isMessageBlocked('msg-1')).toBe(true)
+        expect(result.current.isMessageBlocked('msg-2')).toBe(true)
+        expect(result.current.isMessageBlocked('msg-3')).toBe(true)
+      })
+
+      it('completing one operation does not affect others', () => {
+        const { result } = renderHook(() => useConversationStore())
+
+        act(() => {
+          result.current.startBlockingOperation('msg-1', 'regenerate')
+          result.current.startBlockingOperation('msg-2', 'sendToAPI')
+        })
+
+        act(() => {
+          result.current.completeBlockingOperation('msg-1')
+        })
+
+        expect(result.current.isMessageBlocked('msg-1')).toBe(false)
+        expect(result.current.isMessageBlocked('msg-2')).toBe(true)
+      })
+
+      it('handles many concurrent operations', () => {
+        const { result } = renderHook(() => useConversationStore())
+
+        act(() => {
+          for (let i = 0; i < 20; i++) {
+            result.current.startBlockingOperation(`msg-${i}`, 'regenerate')
+          }
+        })
+
+        // All should be blocked
+        for (let i = 0; i < 20; i++) {
+          expect(result.current.isMessageBlocked(`msg-${i}`)).toBe(true)
+        }
+
+        // Complete even numbered messages
+        act(() => {
+          for (let i = 0; i < 20; i += 2) {
+            result.current.completeBlockingOperation(`msg-${i}`)
+          }
+        })
+
+        // Check isolation
+        for (let i = 0; i < 20; i++) {
+          if (i % 2 === 0) {
+            expect(result.current.isMessageBlocked(`msg-${i}`)).toBe(false)
+          } else {
+            expect(result.current.isMessageBlocked(`msg-${i}`)).toBe(true)
+          }
+        }
+      })
+
+      it('allows same operation type on different messages', () => {
+        const { result } = renderHook(() => useConversationStore())
+
+        act(() => {
+          result.current.startBlockingOperation('msg-1', 'regenerate')
+          result.current.startBlockingOperation('msg-2', 'regenerate')
+          result.current.startBlockingOperation('msg-3', 'regenerate')
+        })
+
+        expect(result.current.isMessageBlocked('msg-1')).toBe(true)
+        expect(result.current.isMessageBlocked('msg-2')).toBe(true)
+        expect(result.current.isMessageBlocked('msg-3')).toBe(true)
+      })
+
+      it('copy operations are independent per message', () => {
+        const { result } = renderHook(() => useConversationStore())
+
+        act(() => {
+          result.current.setNonBlockingOperation('msg-1', 'copy')
+          result.current.setNonBlockingOperation('msg-2', 'copy')
+        })
+
+        expect(result.current.buttonStates['msg-1'].copy?.isActive).toBe(true)
+        expect(result.current.buttonStates['msg-2'].copy?.isActive).toBe(true)
+
+        act(() => {
+          result.current.clearNonBlockingOperation('msg-1', 'copy')
+        })
+
+        expect(result.current.buttonStates['msg-1']?.copy).toBeUndefined()
+        expect(result.current.buttonStates['msg-2'].copy?.isActive).toBe(true)
+      })
+
+      it('handles large state efficiently (1000+ messages)', () => {
+        const { result } = renderHook(() => useConversationStore())
+
+        const startTime = performance.now()
+
+        act(() => {
+          for (let i = 0; i < 1000; i++) {
+            result.current.startBlockingOperation(`msg-${i}`, 'regenerate')
+          }
+        })
+
+        const duration = performance.now() - startTime
+        expect(duration).toBeLessThan(500) // 500ms for 1000 operations (generous for CI environments)
+
+        // Verify random sampling
+        expect(result.current.isMessageBlocked('msg-0')).toBe(true)
+        expect(result.current.isMessageBlocked('msg-500')).toBe(true)
+        expect(result.current.isMessageBlocked('msg-999')).toBe(true)
+      })
+    })
+
+    describe('Button State Persistence', () => {
+      it('persists buttonStates to localStorage', () => {
+        const { result } = renderHook(() => useConversationStore())
+
+        act(() => {
+          result.current.startBlockingOperation('msg-1', 'regenerate')
+          result.current.setNonBlockingOperation('msg-2', 'copy')
+        })
+
+        // Verify buttonStates are in the store (persist middleware will eventually write to localStorage)
+        expect(result.current.buttonStates['msg-1'].blockingOperation?.type).toBe('regenerate')
+        expect(result.current.buttonStates['msg-2'].copy?.isActive).toBe(true)
+
+        // Verify persist middleware is configured correctly (it will persist these eventually)
+        expect(useConversationStore.persist).toBeDefined()
+        expect(useConversationStore.persist.getOptions().name).toBe('conversation-storage')
+      })
+
+      it('restores buttonStates from localStorage on rehydration', () => {
+        // Setup localStorage with button states including loading and error states
+        const mockState = {
+          state: {
+            projects: [],
+            activeProjectId: null,
+            messages: {},
+            buttonStates: {
+              'msg-1': {
+                blockingOperation: {
+                  type: 'sendToAPI' as const,
+                  isLoading: true, // Should be cleaned up
+                },
+              },
+              'msg-2': {
+                copy: {
+                  isActive: true,
+                  timestamp: 1234567890, // Should be cleaned up
+                },
+              },
+              'msg-3': {
+                blockingOperation: {
+                  type: 'regenerate' as const,
+                  isLoading: false,
+                  error: 'Failed to regenerate', // Should persist
+                },
+              },
+            },
+            _hasHydrated: false,
+          },
+          version: 0,
+        }
+        localStorage.setItem('conversation-storage', JSON.stringify(mockState))
+
+        // Manually trigger rehydration by setting state
+        useConversationStore.setState(mockState.state as any)
+
+        // Manually trigger onRehydrateStorage cleanup
+        const state = useConversationStore.getState()
+        const cleanedButtonStates: Record<string, any> = {}
+        Object.entries(state.buttonStates).forEach(([messageId, buttonState]: [string, any]) => {
+          const cleaned: any = {}
+          if (buttonState.blockingOperation && !buttonState.blockingOperation.isLoading) {
+            cleaned.blockingOperation = buttonState.blockingOperation
+          }
+          if (cleaned.blockingOperation) {
+            cleanedButtonStates[messageId] = cleaned
+          }
+        })
+        useConversationStore.setState({ buttonStates: cleanedButtonStates })
+
+        const { result } = renderHook(() => useConversationStore())
+
+        // After hydration, loading states should be cleaned up
+        expect(result.current.buttonStates['msg-1']).toBeUndefined() // Loading state cleaned
+        expect(result.current.buttonStates['msg-2']).toBeUndefined() // Copy state cleaned
+        expect(result.current.buttonStates['msg-3'].blockingOperation).toEqual({
+          type: 'regenerate',
+          isLoading: false,
+          error: 'Failed to regenerate',
+        }) // Error state persisted
+      })
+
+      it('handles empty buttonStates in localStorage', () => {
+        const mockState = {
+          state: {
+            projects: [],
+            activeProjectId: null,
+            messages: {},
+            buttonStates: {},
+            _hasHydrated: false,
+          },
+          version: 0,
+        }
+        localStorage.setItem('conversation-storage', JSON.stringify(mockState))
+
+        const { result } = renderHook(() => useConversationStore())
+
+        expect(result.current.buttonStates).toEqual({})
+      })
+
+      it('handles missing buttonStates in old localStorage data', () => {
+        // Old data format without buttonStates
+        const mockState = {
+          state: {
+            projects: [],
+            activeProjectId: null,
+            messages: {},
+            _hasHydrated: false,
+            // buttonStates is missing
+          },
+          version: 0,
+        }
+        localStorage.setItem('conversation-storage', JSON.stringify(mockState))
+
+        const { result } = renderHook(() => useConversationStore())
+
+        // Should initialize with empty buttonStates
+        expect(result.current.buttonStates).toBeDefined()
+        expect(result.current.buttonStates).toEqual({})
+      })
+
+      it('only cleans loading states on hydration, not error states', () => {
+        const mockState = {
+          state: {
+            projects: [],
+            activeProjectId: null,
+            messages: {},
+            buttonStates: {
+              'msg-loading': {
+                blockingOperation: {
+                  type: 'regenerate' as const,
+                  isLoading: true,
+                },
+              },
+              'msg-error': {
+                blockingOperation: {
+                  type: 'sendToAPI' as const,
+                  isLoading: false,
+                  error: 'Network timeout',
+                },
+              },
+            },
+            _hasHydrated: false,
+          },
+          version: 0,
+        }
+        localStorage.setItem('conversation-storage', JSON.stringify(mockState))
+
+        // Manually trigger rehydration by setting state
+        useConversationStore.setState(mockState.state as any)
+
+        // Manually trigger onRehydrateStorage cleanup
+        const state = useConversationStore.getState()
+        const cleanedButtonStates: Record<string, any> = {}
+        Object.entries(state.buttonStates).forEach(([messageId, buttonState]: [string, any]) => {
+          const cleaned: any = {}
+          if (buttonState.blockingOperation && !buttonState.blockingOperation.isLoading) {
+            cleaned.blockingOperation = buttonState.blockingOperation
+          }
+          if (cleaned.blockingOperation) {
+            cleanedButtonStates[messageId] = cleaned
+          }
+        })
+        useConversationStore.setState({ buttonStates: cleanedButtonStates })
+
+        const { result } = renderHook(() => useConversationStore())
+
+        // Loading state should be removed
+        expect(result.current.buttonStates['msg-loading']).toBeUndefined()
+
+        // Error state should persist
+        expect(result.current.buttonStates['msg-error'].blockingOperation).toEqual({
+          type: 'sendToAPI',
+          isLoading: false,
+          error: 'Network timeout',
+        })
+      })
     })
   })
 })

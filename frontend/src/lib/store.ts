@@ -1,11 +1,12 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { Message, Project } from './types'
+import { Message, Project, MessageButtonState, NonBlockingOperationType, BlockingOperationType } from './types'
 
 interface ConversationState {
   projects: Project[]
   activeProjectId: string | null
   messages: Record<string, Message[]> // projectId -> messages
+  buttonStates: Record<string, MessageButtonState> // messageId -> button state
   _hasHydrated: boolean
 
   // Hydration
@@ -22,6 +23,14 @@ interface ConversationState {
   getMessages: (projectId: string) => Message[]
   clearMessages: (projectId: string) => void
 
+  // Button state actions (synchronous - updates are immediate)
+  setNonBlockingOperation: (messageId: string, operation: NonBlockingOperationType) => void
+  clearNonBlockingOperation: (messageId: string, operation: NonBlockingOperationType) => void
+  startBlockingOperation: (messageId: string, type: BlockingOperationType) => void
+  completeBlockingOperation: (messageId: string) => void
+  failBlockingOperation: (messageId: string, error: string) => void
+  isMessageBlocked: (messageId: string) => boolean
+
   // Selectors
   getActiveProject: () => Project | undefined
   getActiveMessages: () => Message[]
@@ -35,6 +44,7 @@ export const useConversationStore = create<ConversationState>()(
       projects: [],
       activeProjectId: null,
       messages: {},
+      buttonStates: {},
       _hasHydrated: false,
 
       setHasHydrated: (state) => {
@@ -130,11 +140,138 @@ export const useConversationStore = create<ConversationState>()(
       projectCount: () => {
         return get().projects.length
       },
+
+      // Button state actions
+      setNonBlockingOperation: (messageId, operation) => {
+        set((state) => ({
+          buttonStates: {
+            ...state.buttonStates,
+            [messageId]: {
+              ...state.buttonStates[messageId],
+              [operation]: {
+                isActive: true,
+                timestamp: Date.now(),
+              },
+            },
+          },
+        }))
+      },
+
+      // Note: Components are responsible for calling clearNonBlockingOperation
+      // after timeout (typically 2 seconds). Store does not auto-clear copy states.
+      clearNonBlockingOperation: (messageId, operation) => {
+        set((state) => {
+          const messageState = state.buttonStates[messageId]
+          if (!messageState) return state
+
+          const updatedMessageState = {
+            ...messageState,
+            [operation]: undefined,
+          }
+
+          // Clean up if no state remains
+          const hasAnyState = updatedMessageState.copy || updatedMessageState.blockingOperation
+          if (!hasAnyState) {
+            const { [messageId]: _removed, ...remainingStates } = state.buttonStates
+            return { buttonStates: remainingStates }
+          }
+
+          return {
+            buttonStates: {
+              ...state.buttonStates,
+              [messageId]: updatedMessageState,
+            },
+          }
+        })
+      },
+      startBlockingOperation: (messageId, type) => {
+        set((state) => ({
+          buttonStates: {
+            ...state.buttonStates,
+            [messageId]: {
+              ...state.buttonStates[messageId],
+              blockingOperation: {
+                type,
+                isLoading: true,
+              },
+            },
+          },
+        }))
+      },
+      completeBlockingOperation: (messageId) => {
+        set((state) => {
+          const messageState = state.buttonStates[messageId]
+          if (!messageState) return state
+
+          const updatedMessageState = {
+            ...messageState,
+            blockingOperation: undefined,
+          }
+
+          // Clean up if no state remains
+          const hasAnyState = updatedMessageState.copy || updatedMessageState.blockingOperation
+          if (!hasAnyState) {
+            const { [messageId]: _removed, ...remainingStates } = state.buttonStates
+            return { buttonStates: remainingStates }
+          }
+
+          return {
+            buttonStates: {
+              ...state.buttonStates,
+              [messageId]: updatedMessageState,
+            },
+          }
+        })
+      },
+      failBlockingOperation: (messageId, error) => {
+        set((state) => {
+          const messageState = state.buttonStates[messageId]
+          if (!messageState?.blockingOperation) return state
+
+          return {
+            buttonStates: {
+              ...state.buttonStates,
+              [messageId]: {
+                ...messageState,
+                blockingOperation: {
+                  ...messageState.blockingOperation,
+                  isLoading: false,
+                  error,
+                },
+              },
+            },
+          }
+        })
+      },
+      isMessageBlocked: (messageId) => {
+        return !!get().buttonStates[messageId]?.blockingOperation?.isLoading
+      },
     }),
     {
       name: 'conversation-storage',
       onRehydrateStorage: () => (state) => {
-        state?.setHasHydrated(true)
+        if (state) {
+          // Clean up any loading states from previous session
+          const cleanedButtonStates: Record<string, MessageButtonState> = {}
+          Object.entries(state.buttonStates).forEach(([messageId, buttonState]) => {
+            const cleaned: MessageButtonState = {}
+
+            // Don't restore loading operations (they won't complete after page reload)
+            if (buttonState.blockingOperation && !buttonState.blockingOperation.isLoading) {
+              cleaned.blockingOperation = buttonState.blockingOperation
+            }
+
+            // Don't restore copy states (they're temporary UI feedback)
+            // Copy states are cleared after 2 seconds by component anyway
+
+            if (cleaned.blockingOperation) {
+              cleanedButtonStates[messageId] = cleaned
+            }
+          })
+
+          state.buttonStates = cleanedButtonStates
+          state.setHasHydrated(true)
+        }
       },
     }
   )
