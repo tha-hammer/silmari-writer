@@ -679,3 +679,356 @@ export interface StructuredOutputSchema {
     schema: object;
   };
 }
+
+/**
+ * Intent Classification API types (REQ_006)
+ */
+
+/**
+ * Four core intent types for tool routing
+ * REQ_006.2: Union literal type for intent classification
+ *
+ * @example
+ * // deep_research - Use for research queries, investigations, analysis
+ * "Research the latest AI developments" -> deep_research
+ *
+ * @example
+ * // image_generation - Use for visual content creation
+ * "Create an image of a sunset" -> image_generation
+ *
+ * @example
+ * // document_generation - Use for creating documents, reports, spreadsheets
+ * "Generate a PDF report" -> document_generation
+ *
+ * @example
+ * // chat_completion - Default for general conversation and assistance
+ * "Help me write an email" -> chat_completion
+ */
+export type ToolIntent = 'deep_research' | 'image_generation' | 'document_generation' | 'chat_completion';
+
+/**
+ * Parameters for deep research intent
+ * REQ_006.2: DeepResearchParams interface
+ */
+export interface DeepResearchParams {
+  kind: 'deep_research';
+  query: string;
+  depth?: 'quick' | 'thorough';
+  topics?: string[];
+}
+
+/**
+ * Parameters for image generation intent
+ * REQ_006.2: ImageGenerationParams interface
+ */
+export interface ImageGenerationParams {
+  kind: 'image_generation';
+  prompt: string;
+  size?: '1024x1024' | '1536x1024' | '1024x1536' | 'auto';
+  quality?: 'low' | 'medium' | 'high';
+  style?: string;
+}
+
+/**
+ * Parameters for document generation intent
+ * REQ_006.2: DocumentGenerationParams interface
+ */
+export interface DocumentGenerationParams {
+  kind: 'document_generation';
+  type: 'pdf' | 'docx' | 'xlsx';
+  contentDescription: string;
+  template?: string;
+  title?: string;
+}
+
+/**
+ * Parameters for chat completion intent (default fallback)
+ * REQ_006.2: ChatCompletionParams interface
+ */
+export interface ChatCompletionParams {
+  kind: 'chat_completion';
+  message: string;
+}
+
+/**
+ * Discriminated union for extracted parameters
+ * REQ_006.2: Allows narrowing based on 'kind' discriminant field
+ */
+export type ExtractedParams =
+  | DeepResearchParams
+  | ImageGenerationParams
+  | DocumentGenerationParams
+  | ChatCompletionParams;
+
+/**
+ * Type guard for DeepResearchParams
+ * REQ_006.2: Type-safe parameter validation
+ */
+export function isDeepResearchParams(params: ExtractedParams): params is DeepResearchParams {
+  return params.kind === 'deep_research';
+}
+
+/**
+ * Type guard for ImageGenerationParams
+ * REQ_006.2: Type-safe parameter validation
+ */
+export function isImageGenerationParams(params: ExtractedParams): params is ImageGenerationParams {
+  return params.kind === 'image_generation';
+}
+
+/**
+ * Type guard for DocumentGenerationParams
+ * REQ_006.2: Type-safe parameter validation
+ */
+export function isDocumentGenerationParams(params: ExtractedParams): params is DocumentGenerationParams {
+  return params.kind === 'document_generation';
+}
+
+/**
+ * Type guard for ChatCompletionParams
+ * REQ_006.2: Type-safe parameter validation
+ */
+export function isChatCompletionParams(params: ExtractedParams): params is ChatCompletionParams {
+  return params.kind === 'chat_completion';
+}
+
+/**
+ * Type guard for validating unknown strings as ToolIntent
+ * REQ_006.2: Runtime validation for intent strings
+ */
+export function isValidToolIntent(value: string): value is ToolIntent {
+  return ['deep_research', 'image_generation', 'document_generation', 'chat_completion'].includes(value);
+}
+
+/**
+ * Human-readable display names for intents
+ * REQ_006.2: UI display labels
+ */
+export const TOOL_INTENT_DISPLAY_NAMES: Record<ToolIntent, string> = {
+  deep_research: 'Deep Research',
+  image_generation: 'Image Generation',
+  document_generation: 'Document Generation',
+  chat_completion: 'Chat',
+};
+
+/**
+ * Icon names for intent types
+ * REQ_006.2: UI icon mapping
+ */
+export const TOOL_INTENT_ICONS: Record<ToolIntent, string> = {
+  deep_research: 'search',
+  image_generation: 'image',
+  document_generation: 'file-text',
+  chat_completion: 'message-circle',
+};
+
+/**
+ * Alternative intent suggestion
+ * REQ_006.3: For ambiguous classifications
+ */
+export interface AlternativeIntent {
+  tool: ToolIntent;
+  confidence: number;
+}
+
+/**
+ * Confidence thresholds for classification decisions
+ * REQ_006.3: Semantic confidence levels
+ */
+export const CONFIDENCE_THRESHOLDS = {
+  HIGH: 0.8,
+  MEDIUM: 0.5,
+  LOW: 0.3,
+  MINIMUM: 0.1,
+} as const;
+
+/**
+ * Classified intent response structure
+ * REQ_006.3: Core response interface
+ */
+export interface ClassifiedIntent {
+  /** Detected tool type */
+  tool: ToolIntent;
+  /** Confidence score between 0.0 and 1.0 */
+  confidence: number;
+  /** Extracted parameters for the detected tool */
+  extractedParams: ExtractedParams;
+  /** Alternative intents when classification is ambiguous */
+  alternativeIntents?: AlternativeIntent[];
+  /** Original user message preserved for reference */
+  rawMessage?: string;
+  /** Timestamp of classification for debugging */
+  classifiedAt?: string;
+}
+
+/**
+ * Clamp confidence to valid 0.0-1.0 range
+ * REQ_006.3: Handle edge cases like negative, >1, NaN
+ */
+export function clampConfidence(n: number): number {
+  if (Number.isNaN(n) || n === undefined || n === null) {
+    return 0;
+  }
+  return Math.max(0, Math.min(1, n));
+}
+
+/**
+ * Determine if clarification should be requested
+ * REQ_006.3: Returns true if confidence < MEDIUM threshold
+ */
+export function shouldRequestClarification(intent: ClassifiedIntent): boolean {
+  return intent.confidence < CONFIDENCE_THRESHOLDS.MEDIUM;
+}
+
+/**
+ * Get semantic confidence level from numeric score
+ * REQ_006.3: Convert numeric confidence to category
+ */
+export function getConfidenceLevel(confidence: number): 'high' | 'medium' | 'low' {
+  if (confidence >= CONFIDENCE_THRESHOLDS.HIGH) {
+    return 'high';
+  }
+  if (confidence >= CONFIDENCE_THRESHOLDS.MEDIUM) {
+    return 'medium';
+  }
+  return 'low';
+}
+
+/**
+ * Intent classification error codes
+ * REQ_006.1: Error handling codes
+ */
+export type IntentClassificationErrorCode =
+  | 'INVALID_INPUT'
+  | 'RATE_LIMIT'
+  | 'NETWORK'
+  | 'INVALID_API_KEY'
+  | 'API_ERROR'
+  | 'VALIDATION_ERROR'
+  | 'TIMEOUT'
+  | 'INVALID_RESPONSE';
+
+/**
+ * Intent Classification error class
+ * REQ_006.1: Error handling
+ */
+export class IntentClassificationError extends Error {
+  code: IntentClassificationErrorCode;
+  retryable: boolean;
+
+  constructor(message: string, code: IntentClassificationErrorCode, retryable: boolean = false) {
+    super(message);
+    this.name = 'IntentClassificationError';
+    this.code = code;
+    this.retryable = retryable;
+  }
+}
+
+/**
+ * Validate that a response matches ClassifiedIntent structure
+ * REQ_006.3: Runtime validation for API responses
+ * @throws IntentClassificationError on invalid structure
+ */
+export function validateClassifiedIntent(response: unknown): ClassifiedIntent {
+  if (!response || typeof response !== 'object') {
+    throw new IntentClassificationError(
+      'Invalid response: expected object',
+      'VALIDATION_ERROR'
+    );
+  }
+
+  const obj = response as Record<string, unknown>;
+
+  // Validate tool field
+  if (typeof obj.tool !== 'string' || !isValidToolIntent(obj.tool)) {
+    throw new IntentClassificationError(
+      `Invalid tool type: ${obj.tool}`,
+      'VALIDATION_ERROR'
+    );
+  }
+
+  // Validate confidence field
+  if (typeof obj.confidence !== 'number') {
+    throw new IntentClassificationError(
+      'Invalid confidence: expected number',
+      'VALIDATION_ERROR'
+    );
+  }
+
+  // Validate extractedParams field
+  if (!obj.extractedParams || typeof obj.extractedParams !== 'object') {
+    throw new IntentClassificationError(
+      'Invalid extractedParams: expected object',
+      'VALIDATION_ERROR'
+    );
+  }
+
+  const params = obj.extractedParams as Record<string, unknown>;
+  if (typeof params.kind !== 'string') {
+    throw new IntentClassificationError(
+      'Invalid extractedParams: missing kind discriminant',
+      'VALIDATION_ERROR'
+    );
+  }
+
+  // Validate alternativeIntents if present
+  if (obj.alternativeIntents !== undefined) {
+    if (!Array.isArray(obj.alternativeIntents)) {
+      throw new IntentClassificationError(
+        'Invalid alternativeIntents: expected array',
+        'VALIDATION_ERROR'
+      );
+    }
+    for (const alt of obj.alternativeIntents) {
+      if (
+        typeof alt !== 'object' ||
+        !alt ||
+        typeof (alt as AlternativeIntent).tool !== 'string' ||
+        typeof (alt as AlternativeIntent).confidence !== 'number'
+      ) {
+        throw new IntentClassificationError(
+          'Invalid alternativeIntent structure',
+          'VALIDATION_ERROR'
+        );
+      }
+    }
+  }
+
+  return {
+    tool: obj.tool as ToolIntent,
+    confidence: clampConfidence(obj.confidence as number),
+    extractedParams: obj.extractedParams as ExtractedParams,
+    alternativeIntents: obj.alternativeIntents as AlternativeIntent[] | undefined,
+    rawMessage: typeof obj.rawMessage === 'string' ? obj.rawMessage : undefined,
+    classifiedAt: typeof obj.classifiedAt === 'string' ? obj.classifiedAt : undefined,
+  };
+}
+
+/**
+ * Clarification dialog timeout in milliseconds
+ * REQ_006.5: 5 minutes timeout for pending clarification
+ */
+export const CLARIFICATION_TIMEOUT_MS = 300000;
+
+/**
+ * User choices for clarification dialog
+ * REQ_006.5: Clarification flow options
+ */
+export type ClarificationChoice = 'confirm' | 'alternative' | 'clarify' | 'cancel';
+
+/**
+ * Clarification state for managing pending clarifications
+ * REQ_006.5: Session persistence
+ */
+export interface ClarificationState {
+  intent: ClassifiedIntent;
+  originalMessage: string;
+  createdAt: number;
+  expiresAt: number;
+}
+
+/**
+ * Intent classifier prompt version for A/B testing
+ * REQ_006.4: Version tracking
+ */
+export const INTENT_CLASSIFIER_PROMPT_VERSION = 'v1.0.0';
