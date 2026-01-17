@@ -490,3 +490,192 @@ export class ImageGenerationError extends Error {
     this.retryable = retryable;
   }
 }
+
+/**
+ * Document Generation API types (REQ_003)
+ */
+
+export type DocumentGenerationModel = 'gpt-4-turbo' | 'gpt-4o' | 'gpt-4o-mini';
+
+export type DocumentFormat = 'pdf' | 'docx' | 'xlsx';
+
+export type DocumentType = 'report' | 'spreadsheet' | 'letter' | 'proposal' | 'invoice';
+
+export type DocumentGenerationErrorCode =
+  | 'RATE_LIMIT'
+  | 'NETWORK'
+  | 'INVALID_API_KEY'
+  | 'API_ERROR'
+  | 'VALIDATION_ERROR'
+  | 'CONFIG_ERROR'
+  | 'INVALID_RESPONSE'
+  | 'UPLOAD_FAILED'
+  | 'TIMEOUT'
+  | 'GENERATION_FAILED'
+  | 'SCHEMA_VALIDATION_FAILED';
+
+/**
+ * Column type for spreadsheet documents
+ * REQ_003.2: Column definition schema
+ */
+export type ColumnType = 'string' | 'number' | 'date' | 'currency';
+
+/**
+ * Column definition for spreadsheet documents
+ * REQ_003.2: Column schema
+ */
+export interface ColumnDefinition {
+  header: string;
+  type: ColumnType;
+  width?: number;
+}
+
+/**
+ * List item structure for documents
+ * REQ_003.2: List schema
+ */
+export interface DocumentList {
+  items: string[];
+  ordered: boolean;
+  nested?: DocumentList[];
+}
+
+/**
+ * Table structure for documents
+ * REQ_003.2: Table schema
+ */
+export interface DocumentTable {
+  headers: string[];
+  rows: string[][];
+  caption?: string;
+}
+
+/**
+ * Section structure for documents
+ * REQ_003.2: Section schema with nested subsections
+ */
+export interface DocumentSection {
+  heading: string;
+  content: string;
+  subsections?: DocumentSection[];
+  tables?: DocumentTable[];
+  lists?: DocumentList[];
+}
+
+/**
+ * Base document content structure
+ * REQ_003.2: Base document schema
+ */
+export interface DocumentContent {
+  title: string;
+  author?: string;
+  createdAt: string; // ISO date string
+  sections: DocumentSection[];
+}
+
+/**
+ * Spreadsheet content structure
+ * REQ_003.2: Spreadsheet schema
+ */
+export interface SpreadsheetContent {
+  title: string;
+  author?: string;
+  createdAt: string;
+  sheets: SpreadsheetSheet[];
+}
+
+/**
+ * Single sheet within a spreadsheet
+ * REQ_003.2: Sheet schema
+ */
+export interface SpreadsheetSheet {
+  sheetName: string;
+  columns: ColumnDefinition[];
+  rows: (string | number | null)[][];
+}
+
+/**
+ * Request body for Document Generation API
+ * REQ_003.1: Request structure
+ */
+export interface DocumentGenerationRequest {
+  prompt: string;
+  documentType: DocumentType;
+  format: DocumentFormat;
+  model?: DocumentGenerationModel;
+  context?: string;
+}
+
+/**
+ * Generated document result with storage URL
+ * REQ_003.1: Generated document structure
+ */
+export interface GeneratedDocument {
+  url: string;
+  filename: string;
+  format: DocumentFormat;
+  documentType: DocumentType;
+  title: string;
+  generatedAt: string;
+  sizeBytes: number;
+}
+
+/**
+ * Document Generation API response
+ * REQ_003.1: Response structure
+ */
+export interface DocumentGenerationResponse {
+  document: GeneratedDocument;
+  model: DocumentGenerationModel;
+  usage: {
+    inputTokens: number;
+    outputTokens: number;
+  };
+  generationTime: number; // milliseconds
+}
+
+/**
+ * Document Generation error class
+ * REQ_003.1: Error handling
+ */
+export class DocumentGenerationError extends Error {
+  code: DocumentGenerationErrorCode;
+  retryable: boolean;
+  suggestedAction?: string;
+
+  constructor(
+    message: string,
+    code: DocumentGenerationErrorCode,
+    retryable: boolean = false,
+    suggestedAction?: string
+  ) {
+    super(message);
+    this.name = 'DocumentGenerationError';
+    this.code = code;
+    this.retryable = retryable;
+    this.suggestedAction = suggestedAction;
+  }
+}
+
+/**
+ * Schema version information
+ * REQ_003.2: Schema versioning
+ */
+export interface SchemaVersion {
+  version: string;
+  type: DocumentType;
+  schema: object;
+}
+
+/**
+ * JSON Schema for OpenAI Structured Outputs
+ * REQ_003.1: Response format configuration
+ */
+export interface StructuredOutputSchema {
+  type: 'json_schema';
+  json_schema: {
+    name: string;
+    strict: boolean;
+    schema: object;
+  };
+}
