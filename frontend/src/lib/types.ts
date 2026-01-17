@@ -132,12 +132,14 @@ export interface DeepResearchReasoning {
 /**
  * Request body for Deep Research API
  * REQ_000.1-000.4: Full request structure
+ * REQ_001.1-001.4: Tool configuration support
  */
 export interface DeepResearchRequest {
   model: DeepResearchModel;
   input: DeepResearchMessage[];
   reasoning?: DeepResearchReasoning;
   background?: boolean;
+  tools?: DeepResearchTool[];
 }
 
 /**
@@ -226,6 +228,7 @@ export interface DeepResearchApiResponse {
 
 /**
  * Processed Deep Research result for UI consumption
+ * REQ_001.5: Extended with search queries and code executions
  */
 export interface DeepResearchResult {
   text: string;
@@ -236,6 +239,9 @@ export interface DeepResearchResult {
     outputTokens: number;
     reasoningTokens?: number;
   };
+  searchQueries?: Array<{ id: string; query: string; status: string }>;
+  codeExecutions?: Array<{ id: string; code: string; output?: string; status: string }>;
+  costBreakdown?: DeepResearchCostBreakdown;
 }
 
 /**
@@ -276,4 +282,114 @@ export interface DeepResearchOptions {
   developerInstructions?: string;
   reasoningSummary?: ReasoningSummary;
   background?: boolean;
+  tools?: DeepResearchTool[];
+}
+
+/**
+ * Deep Research Tool Types (REQ_001)
+ */
+
+/**
+ * User location for web search targeting
+ * REQ_001.1: Geolocation configuration
+ */
+export interface UserLocation {
+  country: string; // ISO 3166-1 alpha-2 code
+  city?: string;
+  region?: string;
+}
+
+/**
+ * Domain configuration for web search filtering
+ * REQ_001.1: Domain whitelist/blacklist
+ */
+export interface DomainConfig {
+  include?: string[]; // Whitelist domains
+  exclude?: string[]; // Blacklist domains
+}
+
+/**
+ * Search context size for web search
+ * REQ_001.1: Controls amount of context retrieved
+ */
+export type SearchContextSize = 'low' | 'medium' | 'high';
+
+/**
+ * Web Search Preview Tool configuration
+ * REQ_001.1: web_search_preview tool
+ */
+export interface WebSearchPreviewTool {
+  type: 'web_search_preview';
+  domains?: DomainConfig;
+  search_context_size?: SearchContextSize;
+  user_location?: UserLocation;
+}
+
+/**
+ * Code Interpreter Tool configuration
+ * REQ_001.2: code_interpreter tool
+ */
+export interface CodeInterpreterTool {
+  type: 'code_interpreter';
+}
+
+/**
+ * File Search Tool configuration
+ * REQ_001.3: file_search tool with vector store IDs
+ */
+export interface FileSearchTool {
+  type: 'file_search';
+  vector_store_ids: string[]; // Max 2 IDs, format: vs_xxxxx
+}
+
+/**
+ * MCP Tool configuration
+ * REQ_001.4: MCP tool support
+ */
+export interface McpTool {
+  type: 'mcp';
+  server_url: string; // Must be HTTPS
+  require_approval?: boolean; // Default: true
+}
+
+/**
+ * Union type for all Deep Research tools
+ * REQ_001.1-001.4: Combined tool types
+ */
+export type DeepResearchTool =
+  | WebSearchPreviewTool
+  | CodeInterpreterTool
+  | FileSearchTool
+  | McpTool;
+
+/**
+ * Web search call item from response output
+ * REQ_001.5: Intermediate reasoning transparency
+ */
+export interface WebSearchCallItem {
+  id: string;
+  type: 'web_search_call';
+  status: string;
+  query?: string;
+}
+
+/**
+ * Code interpreter call item from response output
+ * REQ_001.5: Code execution tracking
+ */
+export interface CodeInterpreterCallItem {
+  id: string;
+  type: 'code_interpreter_call';
+  status: string;
+  code?: string;
+  output?: string;
+}
+
+/**
+ * Cost breakdown for Deep Research result
+ * REQ_001.2: Track code interpreter session costs
+ */
+export interface DeepResearchCostBreakdown {
+  codeInterpreterSessions?: number;
+  codeInterpreterCost?: number; // $0.03 per session
 }

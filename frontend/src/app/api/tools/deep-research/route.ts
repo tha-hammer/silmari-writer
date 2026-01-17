@@ -11,6 +11,13 @@ import type {
   DeepResearchResult,
   DeepResearchCitation,
   DeepResearchOptions,
+  DeepResearchTool,
+  WebSearchPreviewTool,
+  CodeInterpreterTool,
+  FileSearchTool,
+  McpTool,
+  SearchContextSize,
+  DeepResearchCostBreakdown,
 } from '@/lib/types';
 
 // Constants
@@ -144,6 +151,298 @@ function validateDeveloperInstructions(instructions: unknown): string | undefine
   return trimmed;
 }
 
+// Domain pattern validation (e.g., example.com, sub.example.com)
+const DOMAIN_PATTERN = /^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)*\.[a-zA-Z]{2,}$/;
+
+// ISO 3166-1 alpha-2 country codes (common subset)
+const VALID_COUNTRY_CODES = new Set([
+  'US', 'CA', 'GB', 'DE', 'FR', 'ES', 'IT', 'NL', 'BE', 'AT', 'CH', 'SE', 'NO', 'DK', 'FI',
+  'AU', 'NZ', 'JP', 'KR', 'CN', 'IN', 'BR', 'MX', 'AR', 'CL', 'CO', 'PE', 'ZA', 'EG', 'NG',
+  'RU', 'UA', 'PL', 'CZ', 'RO', 'HU', 'GR', 'PT', 'IE', 'IL', 'AE', 'SA', 'SG', 'MY', 'TH',
+  'ID', 'PH', 'VN', 'TW', 'HK', 'TR', 'PK', 'BD'
+]);
+
+// Vector store ID pattern (vs_xxxxx)
+const VECTOR_STORE_ID_PATTERN = /^vs_[a-zA-Z0-9]+$/;
+
+// Valid search context sizes
+const VALID_SEARCH_CONTEXT_SIZES: SearchContextSize[] = ['low', 'medium', 'high'];
+
+function validateDomain(domain: string): boolean {
+  return DOMAIN_PATTERN.test(domain);
+}
+
+function validateCountryCode(code: string): boolean {
+  return VALID_COUNTRY_CODES.has(code.toUpperCase());
+}
+
+function validateVectorStoreId(id: string): boolean {
+  return VECTOR_STORE_ID_PATTERN.test(id);
+}
+
+function validateHttpsUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+function validateWebSearchPreviewTool(tool: WebSearchPreviewTool): void {
+  // Validate domains if provided
+  if (tool.domains) {
+    if (tool.domains.include) {
+      if (!Array.isArray(tool.domains.include)) {
+        throw new DeepResearchApiError(
+          'web_search_preview domains.include must be an array',
+          'VALIDATION_ERROR',
+          false,
+          400
+        );
+      }
+      for (const domain of tool.domains.include) {
+        if (typeof domain !== 'string' || !validateDomain(domain)) {
+          throw new DeepResearchApiError(
+            `Invalid domain format in include list: "${domain}". Expected format: example.com`,
+            'VALIDATION_ERROR',
+            false,
+            400
+          );
+        }
+      }
+    }
+
+    if (tool.domains.exclude) {
+      if (!Array.isArray(tool.domains.exclude)) {
+        throw new DeepResearchApiError(
+          'web_search_preview domains.exclude must be an array',
+          'VALIDATION_ERROR',
+          false,
+          400
+        );
+      }
+      for (const domain of tool.domains.exclude) {
+        if (typeof domain !== 'string' || !validateDomain(domain)) {
+          throw new DeepResearchApiError(
+            `Invalid domain format in exclude list: "${domain}". Expected format: example.com`,
+            'VALIDATION_ERROR',
+            false,
+            400
+          );
+        }
+      }
+    }
+  }
+
+  // Validate search_context_size if provided
+  if (tool.search_context_size !== undefined) {
+    if (!VALID_SEARCH_CONTEXT_SIZES.includes(tool.search_context_size)) {
+      throw new DeepResearchApiError(
+        `Invalid search_context_size: "${tool.search_context_size}". Must be one of: low, medium, high`,
+        'VALIDATION_ERROR',
+        false,
+        400
+      );
+    }
+  }
+
+  // Validate user_location if provided
+  if (tool.user_location) {
+    if (!tool.user_location.country || typeof tool.user_location.country !== 'string') {
+      throw new DeepResearchApiError(
+        'user_location.country is required and must be a string',
+        'VALIDATION_ERROR',
+        false,
+        400
+      );
+    }
+
+    if (!validateCountryCode(tool.user_location.country)) {
+      throw new DeepResearchApiError(
+        `Invalid country code: "${tool.user_location.country}". Must be a valid ISO 3166-1 alpha-2 code`,
+        'VALIDATION_ERROR',
+        false,
+        400
+      );
+    }
+
+    if (tool.user_location.city !== undefined && typeof tool.user_location.city !== 'string') {
+      throw new DeepResearchApiError(
+        'user_location.city must be a string',
+        'VALIDATION_ERROR',
+        false,
+        400
+      );
+    }
+
+    if (tool.user_location.region !== undefined && typeof tool.user_location.region !== 'string') {
+      throw new DeepResearchApiError(
+        'user_location.region must be a string',
+        'VALIDATION_ERROR',
+        false,
+        400
+      );
+    }
+  }
+}
+
+function validateCodeInterpreterTool(tool: CodeInterpreterTool): void {
+  // code_interpreter tool only requires type field, which is already validated
+  if (tool.type !== 'code_interpreter') {
+    throw new DeepResearchApiError(
+      'Invalid code_interpreter tool type',
+      'VALIDATION_ERROR',
+      false,
+      400
+    );
+  }
+}
+
+function validateFileSearchTool(tool: FileSearchTool): void {
+  // Validate vector_store_ids is required and is an array
+  if (!tool.vector_store_ids || !Array.isArray(tool.vector_store_ids)) {
+    throw new DeepResearchApiError(
+      'file_search tool requires vector_store_ids array',
+      'VALIDATION_ERROR',
+      false,
+      400
+    );
+  }
+
+  // Validate max 2 vector store IDs
+  if (tool.vector_store_ids.length > 2) {
+    throw new DeepResearchApiError(
+      'file_search tool allows maximum of 2 vector_store_ids',
+      'VALIDATION_ERROR',
+      false,
+      400
+    );
+  }
+
+  // Validate at least 1 vector store ID
+  if (tool.vector_store_ids.length === 0) {
+    throw new DeepResearchApiError(
+      'file_search tool requires at least one vector_store_id',
+      'VALIDATION_ERROR',
+      false,
+      400
+    );
+  }
+
+  // Validate each vector store ID format
+  for (const id of tool.vector_store_ids) {
+    if (typeof id !== 'string' || !validateVectorStoreId(id)) {
+      throw new DeepResearchApiError(
+        `Invalid vector_store_id format: "${id}". Expected format: vs_xxxxx`,
+        'VALIDATION_ERROR',
+        false,
+        400
+      );
+    }
+  }
+}
+
+function validateMcpTool(tool: McpTool): void {
+  // Validate server_url is required
+  if (!tool.server_url || typeof tool.server_url !== 'string') {
+    throw new DeepResearchApiError(
+      'mcp tool requires server_url',
+      'VALIDATION_ERROR',
+      false,
+      400
+    );
+  }
+
+  // Validate URL format
+  try {
+    new URL(tool.server_url);
+  } catch {
+    throw new DeepResearchApiError(
+      `Invalid server_url format: "${tool.server_url}". Must be a valid URL`,
+      'VALIDATION_ERROR',
+      false,
+      400
+    );
+  }
+
+  // Validate HTTPS requirement
+  if (!validateHttpsUrl(tool.server_url)) {
+    throw new DeepResearchApiError(
+      'mcp server_url must use HTTPS protocol',
+      'VALIDATION_ERROR',
+      false,
+      400
+    );
+  }
+
+  // Validate require_approval if provided
+  if (tool.require_approval !== undefined && typeof tool.require_approval !== 'boolean') {
+    throw new DeepResearchApiError(
+      'mcp require_approval must be a boolean',
+      'VALIDATION_ERROR',
+      false,
+      400
+    );
+  }
+}
+
+function validateTools(tools: unknown): DeepResearchTool[] | undefined {
+  if (tools === undefined || tools === null) {
+    return undefined;
+  }
+
+  if (!Array.isArray(tools)) {
+    throw new DeepResearchApiError(
+      'tools must be an array',
+      'VALIDATION_ERROR',
+      false,
+      400
+    );
+  }
+
+  const validatedTools: DeepResearchTool[] = [];
+
+  for (const tool of tools) {
+    if (!tool || typeof tool !== 'object' || !('type' in tool)) {
+      throw new DeepResearchApiError(
+        'Each tool must have a type field',
+        'VALIDATION_ERROR',
+        false,
+        400
+      );
+    }
+
+    switch (tool.type) {
+      case 'web_search_preview':
+        validateWebSearchPreviewTool(tool as WebSearchPreviewTool);
+        validatedTools.push(tool as WebSearchPreviewTool);
+        break;
+      case 'code_interpreter':
+        validateCodeInterpreterTool(tool as CodeInterpreterTool);
+        validatedTools.push(tool as CodeInterpreterTool);
+        break;
+      case 'file_search':
+        validateFileSearchTool(tool as FileSearchTool);
+        validatedTools.push(tool as FileSearchTool);
+        break;
+      case 'mcp':
+        validateMcpTool(tool as McpTool);
+        validatedTools.push(tool as McpTool);
+        break;
+      default:
+        throw new DeepResearchApiError(
+          `Unknown tool type: "${tool.type}". Supported types: web_search_preview, code_interpreter, file_search, mcp`,
+          'VALIDATION_ERROR',
+          false,
+          400
+        );
+    }
+  }
+
+  return validatedTools.length > 0 ? validatedTools : undefined;
+}
+
 // Build input messages array
 function buildInputMessages(
   query: string,
@@ -173,24 +472,38 @@ function buildRequestPayload(
   model: DeepResearchModel,
   input: DeepResearchMessage[],
   reasoningSummary: ReasoningSummary,
-  background: boolean
+  background: boolean,
+  tools?: DeepResearchTool[]
 ): DeepResearchRequest {
-  return {
+  const payload: DeepResearchRequest = {
     model,
     input,
     reasoning: { summary: reasoningSummary },
     background,
   };
+
+  if (tools && tools.length > 0) {
+    payload.tools = tools;
+  }
+
+  return payload;
 }
+
+// Code interpreter session cost constant
+const CODE_INTERPRETER_SESSION_COST = 0.03;
 
 // Process API response into result format
 function processApiResponse(response: DeepResearchApiResponse): DeepResearchResult {
   // Extract text from output
   let text = '';
   const citations: DeepResearchCitation[] = [];
+  const searchQueries: Array<{ id: string; query: string; status: string }> = [];
+  const codeExecutions: Array<{ id: string; code: string; output?: string; status: string }> = [];
+  let codeInterpreterSessions = 0;
 
   if (response.output) {
     for (const outputItem of response.output) {
+      // Handle message type items
       if (outputItem.type === 'message' && outputItem.content) {
         for (const contentBlock of outputItem.content) {
           if (contentBlock.type === 'output_text') {
@@ -201,11 +514,51 @@ function processApiResponse(response: DeepResearchApiResponse): DeepResearchResu
           }
         }
       }
+
+      // Handle web_search_call items (REQ_001.5)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const anyItem = outputItem as any;
+      if (anyItem.type === 'web_search_call') {
+        searchQueries.push({
+          id: anyItem.id || '',
+          query: anyItem.query || '',
+          status: anyItem.status || 'unknown',
+        });
+      }
+
+      // Handle code_interpreter_call items (REQ_001.2, REQ_001.5)
+      if (anyItem.type === 'code_interpreter_call') {
+        codeExecutions.push({
+          id: anyItem.id || '',
+          code: anyItem.code || '',
+          output: anyItem.output,
+          status: anyItem.status || 'unknown',
+        });
+        // Each code_interpreter_call represents a session
+        codeInterpreterSessions++;
+      }
     }
   }
 
-  // Extract reasoning steps
+  // Extract reasoning steps from response.output with type === 'reasoning' (REQ_001.5)
   const reasoningSteps: Array<{ id: string; text: string }> = [];
+
+  // Check for reasoning items in output array
+  if (response.output) {
+    for (const outputItem of response.output) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const anyItem = outputItem as any;
+      if (anyItem.type === 'reasoning' && anyItem.summary) {
+        const summaryText = anyItem.summary
+          .filter((s: { type: string }) => s.type === 'summary_text')
+          .map((s: { text: string }) => s.text)
+          .join(' ');
+        reasoningSteps.push({ id: anyItem.id, text: summaryText });
+      }
+    }
+  }
+
+  // Also check legacy reasoning field
   if (response.reasoning) {
     for (const step of response.reasoning) {
       if (step.type === 'reasoning' && step.summary) {
@@ -213,7 +566,10 @@ function processApiResponse(response: DeepResearchApiResponse): DeepResearchResu
           .filter((s) => s.type === 'summary_text')
           .map((s) => s.text)
           .join(' ');
-        reasoningSteps.push({ id: step.id, text: summaryText });
+        // Avoid duplicates
+        if (!reasoningSteps.find(r => r.id === step.id)) {
+          reasoningSteps.push({ id: step.id, text: summaryText });
+        }
       }
     }
   }
@@ -227,7 +583,31 @@ function processApiResponse(response: DeepResearchApiResponse): DeepResearchResu
       }
     : undefined;
 
-  return { text, citations, reasoningSteps, usage };
+  // Build cost breakdown (REQ_001.2)
+  const costBreakdown: DeepResearchCostBreakdown | undefined =
+    codeInterpreterSessions > 0
+      ? {
+          codeInterpreterSessions,
+          codeInterpreterCost: codeInterpreterSessions * CODE_INTERPRETER_SESSION_COST,
+        }
+      : undefined;
+
+  // Build result
+  const result: DeepResearchResult = { text, citations, reasoningSteps, usage };
+
+  if (searchQueries.length > 0) {
+    result.searchQueries = searchQueries;
+  }
+
+  if (codeExecutions.length > 0) {
+    result.codeExecutions = codeExecutions;
+  }
+
+  if (costBreakdown) {
+    result.costBreakdown = costBreakdown;
+  }
+
+  return result;
 }
 
 // Handle API errors
@@ -291,6 +671,7 @@ export async function POST(request: NextRequest) {
     const defaultReasoning = DEFAULT_REASONING_MAP[depth];
     const reasoningSummary = validateReasoningSummary(body.reasoningSummary, defaultReasoning);
     const developerInstructions = validateDeveloperInstructions(body.developerInstructions);
+    const tools = validateTools(body.tools);
 
     // Determine if background mode (default true)
     const background = body.background !== false;
@@ -300,7 +681,7 @@ export async function POST(request: NextRequest) {
 
     // Build request
     const input = buildInputMessages(query, developerInstructions);
-    const payload = buildRequestPayload(model, input, reasoningSummary, background);
+    const payload = buildRequestPayload(model, input, reasoningSummary, background, tools);
 
     // Log request (timing and model)
     const startTime = Date.now();
