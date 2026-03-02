@@ -102,7 +102,7 @@ export const CaseClaimSchema = z.object({
   caseId: z.string().min(1),
   text: z.string().min(1),
   status: z.enum(['confirmed', 'unconfirmed', 'rejected']),
-  metadata: z.record(z.unknown()).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
 export type CaseClaim = z.infer<typeof CaseClaimSchema>;

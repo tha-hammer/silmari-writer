@@ -4,6 +4,11 @@ const nextConfig: NextConfig = {
   // Production optimizations
   reactStrictMode: true,
 
+  // Use a production-focused TS config for builds to avoid test-only type noise.
+  typescript: {
+    tsconfigPath: './tsconfig.build.json',
+  },
+
   // Performance
   compiler: {
     removeConsole: process.env.NODE_ENV === "production",

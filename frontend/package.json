@@ -5,7 +5,7 @@
   "scripts": {
     "baml-generate": "baml-cli generate --from ./src/baml_src",
     "dev": "next dev",
-    "build": "baml-cli generate --from ./src/baml_src && next build",
+    "build": "baml-cli generate --from ./src/baml_src && next build --webpack",
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",

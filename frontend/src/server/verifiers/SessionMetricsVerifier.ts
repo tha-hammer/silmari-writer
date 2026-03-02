@@ -31,7 +31,7 @@ const MetricsInputSchema = z.object({
     sessionId: z.string().uuid(),
     category: z.enum(['DRAFT', 'VERIFY', 'FINALIZE', 'EDIT', 'REVISION', 'SIGNAL']),
     timestamp: z.string(),
-    metadata: z.record(z.unknown()).optional(),
+    metadata: z.record(z.string(), z.unknown()).optional(),
   })).min(1, 'At least one event is required'),
 });
 

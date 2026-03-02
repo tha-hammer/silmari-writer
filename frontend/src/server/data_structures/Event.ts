@@ -34,7 +34,7 @@ export const EventSchema = z.object({
   sessionId: z.string().uuid(),
   category: z.enum(['DRAFT', 'VERIFY', 'FINALIZE', 'EDIT', 'REVISION', 'SIGNAL']),
   timestamp: z.string(),
-  metadata: z.record(z.unknown()).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
 export type Event = z.infer<typeof EventSchema>;

@@ -54,8 +54,8 @@ export const AnswerFinalizeService = {
     // Step 4: Return finalize result
     return {
       id: updated.id,
-      finalized: updated.finalized,
-      editable: updated.editable,
+      finalized: true,
+      editable: false,
     };
   },
 } as const;
