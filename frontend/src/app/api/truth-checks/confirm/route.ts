@@ -18,7 +18,7 @@ import { z } from 'zod';
 const ConfirmTruthCheckRequestSchema = z.object({
   claim_id: z.string().min(1, 'claim_id is required'),
   status: z.enum(['confirmed', 'denied'], {
-    errorMap: () => ({ message: 'status must be "confirmed" or "denied"' }),
+    error: 'status must be "confirmed" or "denied"',
   }),
   source: z.string().min(1, 'source is required'),
 });
