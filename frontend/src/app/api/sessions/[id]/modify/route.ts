@@ -1,5 +1,5 @@
 /**
- * POST /api/sessions/[sessionId]/modify
+ * POST /api/sessions/[id]/modify
  *
  * Resource: api-m5g7 (endpoint)
  * Path: 309-reject-modifications-to-finalized-session
@@ -34,10 +34,10 @@ export type ModifySessionCommand = z.infer<typeof ModifySessionBodySchema>;
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ sessionId: string }> },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const { sessionId } = await params;
+    const { id: sessionId } = await params;
 
     // Validate request body
     const body = await request.json();

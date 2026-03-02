@@ -50,7 +50,7 @@ function createRequest(body: Record<string, unknown>): NextRequest {
 // Tests
 // ---------------------------------------------------------------------------
 
-describe('POST /api/sessions/[sessionId]/modify — Step 2: Route to handler', () => {
+describe('POST /api/sessions/[id]/modify — Step 2: Route to handler', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -72,7 +72,7 @@ describe('POST /api/sessions/[sessionId]/modify — Step 2: Route to handler', (
       });
 
       const request = createRequest({ sessionId, action: 'ADD_VOICE' });
-      await POST(request, { params: Promise.resolve({ sessionId }) });
+      await POST(request, { params: Promise.resolve({ id: sessionId }) });
 
       expect(mockHandler.handle).toHaveBeenCalledWith(sessionId, 'ADD_VOICE');
     });
@@ -89,7 +89,7 @@ describe('POST /api/sessions/[sessionId]/modify — Step 2: Route to handler', (
       });
 
       const request = createRequest({ sessionId, action: 'ADD_VOICE' });
-      const response = await POST(request, { params: Promise.resolve({ sessionId }) });
+      const response = await POST(request, { params: Promise.resolve({ id: sessionId }) });
       const data = await response.json();
 
       expect(response.status).toBe(409);
@@ -115,7 +115,7 @@ describe('POST /api/sessions/[sessionId]/modify — Step 2: Route to handler', (
       });
 
       const request = createRequest({ sessionId, action: 'ADD_VOICE' });
-      const response = await POST(request, { params: Promise.resolve({ sessionId }) });
+      const response = await POST(request, { params: Promise.resolve({ id: sessionId }) });
 
       expect(response.status).toBe(200);
     });
@@ -138,7 +138,7 @@ describe('POST /api/sessions/[sessionId]/modify — Step 2: Route to handler', (
       });
 
       const request = createRequest({ sessionId, action: 'ADD_VOICE' });
-      const response = await POST(request, { params: Promise.resolve({ sessionId }) });
+      const response = await POST(request, { params: Promise.resolve({ id: sessionId }) });
 
       expect(response.status).not.toBe(400);
       expect(mockHandler.handle).toHaveBeenCalledWith(sessionId, 'ADD_VOICE');
@@ -152,7 +152,7 @@ describe('POST /api/sessions/[sessionId]/modify — Step 2: Route to handler', (
   describe('ErrorConsistency', () => {
     it('should return 400 with INVALID_REQUEST for malformed body', async () => {
       const request = createRequest({ garbage: true });
-      const response = await POST(request, { params: Promise.resolve({ sessionId }) });
+      const response = await POST(request, { params: Promise.resolve({ id: sessionId }) });
       const data = await response.json();
 
       expect(response.status).toBe(400);
@@ -162,7 +162,7 @@ describe('POST /api/sessions/[sessionId]/modify — Step 2: Route to handler', (
 
     it('should return 400 when action is missing', async () => {
       const request = createRequest({ sessionId });
-      const response = await POST(request, { params: Promise.resolve({ sessionId }) });
+      const response = await POST(request, { params: Promise.resolve({ id: sessionId }) });
       const data = await response.json();
 
       expect(response.status).toBe(400);
@@ -171,7 +171,7 @@ describe('POST /api/sessions/[sessionId]/modify — Step 2: Route to handler', (
 
     it('should return 400 when action is invalid value', async () => {
       const request = createRequest({ sessionId, action: 'INVALID_ACTION' });
-      const response = await POST(request, { params: Promise.resolve({ sessionId }) });
+      const response = await POST(request, { params: Promise.resolve({ id: sessionId }) });
       const data = await response.json();
 
       expect(response.status).toBe(400);
@@ -184,7 +184,7 @@ describe('POST /api/sessions/[sessionId]/modify — Step 2: Route to handler', (
       );
 
       const request = createRequest({ sessionId, action: 'ADD_VOICE' });
-      const response = await POST(request, { params: Promise.resolve({ sessionId }) });
+      const response = await POST(request, { params: Promise.resolve({ id: sessionId }) });
       const data = await response.json();
 
       expect(response.status).toBe(404);
@@ -195,7 +195,7 @@ describe('POST /api/sessions/[sessionId]/modify — Step 2: Route to handler', (
       mockHandler.handle.mockRejectedValue(new Error('Unexpected DB failure'));
 
       const request = createRequest({ sessionId, action: 'ADD_VOICE' });
-      const response = await POST(request, { params: Promise.resolve({ sessionId }) });
+      const response = await POST(request, { params: Promise.resolve({ id: sessionId }) });
       const data = await response.json();
 
       expect(response.status).toBe(500);
