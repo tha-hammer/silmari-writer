@@ -5,6 +5,7 @@ import { SessionWorkflowShell } from '../SessionWorkflowShell';
 import type { SessionView } from '@/server/data_structures/SessionView';
 
 const mockOrientStoryModule = vi.fn();
+const mockWritingFlowModule = vi.fn();
 
 vi.mock('@/modules/orient-story/OrientStoryModule', () => ({
   OrientStoryModule: (props: { questionId: string }) => {
@@ -14,7 +15,10 @@ vi.mock('@/modules/orient-story/OrientStoryModule', () => ({
 }));
 
 vi.mock('@/modules/WritingFlowModule', () => ({
-  WritingFlowModule: () => <div data-testid="writing-flow-module" />,
+  WritingFlowModule: (props: { initialStep?: string }) => {
+    mockWritingFlowModule(props);
+    return <div data-testid="writing-flow-module" />;
+  },
 }));
 
 vi.mock('@/modules/review/ReviewWorkflowModule', () => ({
@@ -83,6 +87,10 @@ describe('SessionWorkflowShell', () => {
   it('renders WritingFlowModule when stage resolves to recall/review', () => {
     render(<SessionWorkflowShell session={makeSession('REVIEW')} />);
     expect(screen.getByTestId('writing-flow-module')).toBeInTheDocument();
+    expect(mockWritingFlowModule).toHaveBeenCalled();
+    expect(mockWritingFlowModule.mock.calls.at(-1)?.[0]).toEqual(
+      expect.objectContaining({ initialStep: 'RECALL' }),
+    );
   });
 
   it('renders fallback UI for unknown stage', () => {

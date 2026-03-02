@@ -94,7 +94,7 @@ export function SessionWorkflowShell({ session }: SessionWorkflowShellProps) {
             )
       )}
 
-      {stage === 'RECALL_REVIEW' && <WritingFlowModule initialStep="REVIEW" />}
+      {stage === 'RECALL_REVIEW' && <WritingFlowModule initialStep="RECALL" />}
 
       {stage === 'DRAFT' && (
         <ReviewWorkflowModule
