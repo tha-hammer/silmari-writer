@@ -3,6 +3,9 @@
 import { useState, useRef, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react'
 import { Mic, Square, Play, Pause, RotateCcw } from 'lucide-react'
 import { toast } from 'sonner'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/cn'
 
 // Constants
 export const MAX_RECORDING_TIME_MS = 5 * 60 * 1000 // 5 minutes
@@ -273,7 +276,7 @@ const AudioRecorder = forwardRef<AudioRecorderHandle, AudioRecorderProps>(
   }))
 
   return (
-    <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+    <div className="flex items-center gap-3 rounded-xl border bg-card px-3 py-2.5 shadow-sm">
       {/* Hidden audio element for playback */}
       {audioUrl && (
         <audio
@@ -311,37 +314,42 @@ const AudioRecorder = forwardRef<AudioRecorderHandle, AudioRecorderProps>(
       <div className="flex items-center gap-2">
         {/* Idle state - show record button */}
         {state === 'idle' && (
-          <button
+          <Button
             type="button"
             onClick={startRecording}
-            className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
+            variant="destructive"
+            size="sm"
+            className="rounded-full"
             aria-label="Record"
           >
             <Mic className="w-4 h-4" />
             Record
-          </button>
+          </Button>
         )}
 
         {/* Recording state - show stop button */}
         {state === 'recording' && (
-          <button
+          <Button
             type="button"
             onClick={stopRecording}
-            className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-full hover:bg-gray-900 transition-colors"
+            variant="secondary"
+            size="sm"
+            className="rounded-full"
             aria-label="Stop"
           >
             <Square className="w-4 h-4" />
             Stop
-          </button>
+          </Button>
         )}
 
         {/* Stopped state - show playback controls */}
         {state === 'stopped' && (
           <>
-            <button
+            <Button
               type="button"
               onClick={togglePlayback}
-              className="flex items-center gap-2 px-3 py-2 bg-blue-500 text-white rounded-full hover:bg-blue-600 transition-colors"
+              size="icon"
+              className="rounded-full"
               aria-label={isPlaying ? 'Pause' : 'Play'}
             >
               {isPlaying ? (
@@ -349,38 +357,42 @@ const AudioRecorder = forwardRef<AudioRecorderHandle, AudioRecorderProps>(
               ) : (
                 <Play className="w-4 h-4" />
               )}
-            </button>
+            </Button>
 
-            <button
+            <Button
               type="button"
               onClick={reRecord}
-              className="flex items-center gap-2 px-3 py-2 bg-gray-200 text-gray-700 rounded-full hover:bg-gray-300 transition-colors"
+              variant="outline"
+              size="icon"
+              className="rounded-full"
               aria-label="Re-record"
             >
               <RotateCcw className="w-4 h-4" />
-            </button>
+            </Button>
           </>
         )}
 
         {/* Error state - show record button with error message */}
         {state === 'error' && (
-          <button
+          <Button
             type="button"
             onClick={startRecording}
-            className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
+            variant="destructive"
+            size="sm"
+            className="rounded-full"
             aria-label="Record"
           >
             <Mic className="w-4 h-4" />
             Record
-          </button>
+          </Button>
         )}
       </div>
 
       {/* Error message */}
       {error && (
-        <span className="text-red-500 text-sm">
+        <Badge variant="destructive" className={cn('h-6 px-2 text-xs')}>
           {error}
-        </span>
+        </Badge>
       )}
     </div>
   )

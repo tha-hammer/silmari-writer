@@ -6,7 +6,10 @@ import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/cjs/styles/prism';
 import { Message } from '@/lib/types';
+import { cn } from '@/lib/cn';
 import { formatBytes, formatRelativeTime } from '@/lib/utils';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent } from '@/components/ui/card';
 import ButtonRibbon from './ButtonRibbon';
 
 interface MessageBubbleProps {
@@ -18,76 +21,96 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
 
   return (
     <div
-      className={`flex mb-4 ${isUser ? 'justify-end' : 'justify-start'}`}
+      className={cn('flex w-full items-end gap-3', isUser ? 'justify-end' : 'justify-start')}
       data-testid={`message-${message.id}`}
     >
       {!isUser && (
-        <div className="flex-shrink-0 mr-2">
-          <div className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center">
-            <Bot className="w-5 h-5 text-gray-600" aria-label="AI" />
+        <div className="flex-shrink-0">
+          <div className="flex h-8 w-8 items-center justify-center rounded-full border bg-secondary text-secondary-foreground">
+            <Bot className="h-4 w-4" aria-label="AI" />
           </div>
         </div>
       )}
-      <div className="flex flex-col max-w-[70%]">
-        <div
-          className={`rounded-lg px-4 py-2 ${
-            isUser
-              ? 'bg-blue-500 text-white'
-              : 'bg-gray-200 text-gray-900'
-          }`}
+      <div className={cn('flex max-w-[82%] flex-col gap-1', isUser && 'items-end')}>
+        {message.isVoiceTranscription && (
+          <Badge variant={isUser ? 'secondary' : 'outline'} className="uppercase tracking-wide">
+            Voice transcription
+          </Badge>
+        )}
+
+        <Card
+          className={cn(
+            'overflow-hidden border shadow-sm',
+            isUser ? 'border-primary/40 bg-primary text-primary-foreground' : 'bg-card',
+          )}
           data-role={message.role}
         >
-          <div className={`prose prose-sm max-w-none ${isUser ? 'prose-invert' : ''}`}>
-            <ReactMarkdown
-              remarkPlugins={[remarkGfm]}
-              components={{
-                code({ className, children, ...props }) {
-                  const match = /language-(\w+)/.exec(className || '');
-                  const codeString = String(children).replace(/\n$/, '');
-                  // Only use SyntaxHighlighter for multi-line code blocks
-                  const isBlock = codeString.includes('\n') || match;
-                  return isBlock && match ? (
-                    <SyntaxHighlighter
-                      style={oneDark}
-                      language={match[1]}
-                      PreTag="div"
-                    >
-                      {codeString}
-                    </SyntaxHighlighter>
-                  ) : (
-                    <code className={className} {...props}>
-                      {children}
-                    </code>
-                  );
-                },
-              }}
+          <CardContent className="space-y-3 px-4 py-3">
+            <div
+              className={cn(
+                'prose prose-sm max-w-none [&_p:first-child]:mt-0 [&_p:last-child]:mb-0 [&_pre]:my-3',
+                isUser ? 'prose-invert' : 'prose-neutral',
+              )}
             >
-              {message.content}
-            </ReactMarkdown>
-          </div>
-          {message.attachments && message.attachments.length > 0 && (
-            <div data-testid="attachment-list" className="mt-2 space-y-1">
-              {message.attachments.map((attachment) => (
-                <div
-                  key={attachment.id}
-                  className={`flex items-center gap-2 text-xs rounded px-2 py-1 ${
-                    isUser ? 'bg-blue-600/30' : 'bg-gray-300/50'
-                  }`}
-                >
-                  <Paperclip className="h-3 w-3 flex-shrink-0" />
-                  <span className="truncate">{attachment.filename}</span>
-                  <span className="flex-shrink-0 opacity-70">{formatBytes(attachment.size)}</span>
-                </div>
-              ))}
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={{
+                  code({ className, children, ...props }) {
+                    const match = /language-(\w+)/.exec(className || '');
+                    const codeString = String(children).replace(/\n$/, '');
+                    // Only use SyntaxHighlighter for multi-line code blocks
+                    const isBlock = codeString.includes('\n') || match;
+                    return isBlock && match ? (
+                      <SyntaxHighlighter
+                        style={oneDark}
+                        language={match[1]}
+                        PreTag="div"
+                      >
+                        {codeString}
+                      </SyntaxHighlighter>
+                    ) : (
+                      <code className={className} {...props}>
+                        {children}
+                      </code>
+                    );
+                  },
+                }}
+              >
+                {message.content}
+              </ReactMarkdown>
             </div>
-          )}
-          <div
-            className={`text-xs mt-1 ${isUser ? 'text-blue-100' : 'text-gray-500'}`}
-            data-testid="message-timestamp"
-          >
-            {formatRelativeTime(message.timestamp)}
-          </div>
-        </div>
+
+            {message.attachments && message.attachments.length > 0 && (
+              <div data-testid="attachment-list" className="space-y-1.5">
+                {message.attachments.map((attachment) => (
+                  <div
+                    key={attachment.id}
+                    className={cn(
+                      'flex items-center gap-2 rounded-md border px-2 py-1.5 text-xs',
+                      isUser
+                        ? 'border-primary-foreground/25 bg-primary-foreground/10 text-primary-foreground'
+                        : 'border-border bg-muted/60 text-muted-foreground',
+                    )}
+                  >
+                    <Paperclip className="h-3 w-3 flex-shrink-0" />
+                    <span className="truncate">{attachment.filename}</span>
+                    <span className="ml-auto flex-shrink-0 opacity-75">{formatBytes(attachment.size)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div
+              className={cn(
+                'text-xs',
+                isUser ? 'text-primary-foreground/75' : 'text-muted-foreground',
+              )}
+              data-testid="message-timestamp"
+            >
+              {formatRelativeTime(message.timestamp)}
+            </div>
+          </CardContent>
+        </Card>
 
         {/* ButtonRibbon for assistant messages only */}
         {!isUser && (
@@ -95,9 +118,9 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
         )}
       </div>
       {isUser && (
-        <div className="flex-shrink-0 ml-2">
-          <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center">
-            <User className="w-5 h-5 text-white" aria-label="User" />
+        <div className="flex-shrink-0">
+          <div className="flex h-8 w-8 items-center justify-center rounded-full border border-primary/40 bg-primary text-primary-foreground">
+            <User className="h-4 w-4" aria-label="User" />
           </div>
         </div>
       )}

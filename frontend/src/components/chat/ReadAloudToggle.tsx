@@ -1,6 +1,8 @@
 'use client';
 
 import { Volume2, VolumeX } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/cn';
 import { useConversationStore } from '@/lib/store';
 import { useRealtimeSession } from '@/hooks/useRealtimeSession';
 import { VOICE_MODES } from '@/lib/voice-types';
@@ -22,16 +24,14 @@ export default function ReadAloudToggle() {
   };
 
   return (
-    <button
+    <Button
       onClick={handleToggle}
       disabled={isConnecting}
       aria-pressed={readAloudEnabled}
       aria-label="Read Aloud"
-      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm transition-colors ${
-        readAloudEnabled
-          ? 'bg-primary text-primary-foreground'
-          : 'bg-muted text-muted-foreground hover:bg-muted/80'
-      } ${isConnecting ? 'opacity-50 cursor-not-allowed' : ''}`}
+      variant={readAloudEnabled ? 'default' : 'secondary'}
+      size="sm"
+      className={cn(isConnecting && 'cursor-not-allowed')}
     >
       {readAloudEnabled ? (
         <Volume2 className="h-4 w-4" />
@@ -39,6 +39,6 @@ export default function ReadAloudToggle() {
         <VolumeX className="h-4 w-4" />
       )}
       Read Aloud
-    </button>
+    </Button>
   );
 }

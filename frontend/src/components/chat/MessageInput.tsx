@@ -2,6 +2,8 @@
 
 import { useState, useRef, useEffect, KeyboardEvent } from 'react'
 import { Send } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Textarea } from '@/components/ui/textarea'
 
 interface MessageInputProps {
   onSendMessage: (content: string) => void
@@ -46,26 +48,32 @@ export default function MessageInput({
   const isDisabled = disabled || isEmpty
 
   return (
-    <div className="flex items-end gap-2 p-2 border border-border rounded-lg bg-card">
-      <textarea
-        ref={textareaRef}
-        value={content}
-        onChange={(e) => setContent(e.target.value)}
-        onKeyDown={handleKeyDown}
-        placeholder={placeholder}
-        disabled={disabled}
-        rows={1}
-        className="flex-1 resize-none bg-transparent border-none outline-none min-h-[40px] max-h-[200px] py-2 px-2"
-        aria-label="Message input"
-      />
-      <button
-        onClick={handleSubmit}
-        disabled={isDisabled}
-        aria-label="Send message"
-        className="p-2 rounded-md bg-primary text-primary-foreground disabled:opacity-50 disabled:cursor-not-allowed hover:bg-primary/90 transition-colors"
-      >
+    <div className="rounded-xl border bg-card/90 p-3 shadow-sm">
+      <div className="flex items-end gap-2">
+        <Textarea
+          ref={textareaRef}
+          value={content}
+          onChange={(e) => setContent(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder={placeholder}
+          disabled={disabled}
+          rows={1}
+          className="min-h-[40px] max-h-[200px] resize-none border-0 bg-transparent p-0 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
+          aria-label="Message input"
+        />
+        <Button
+          onClick={handleSubmit}
+          disabled={isDisabled}
+          aria-label="Send message"
+          size="icon"
+          className="h-9 w-9 shrink-0 rounded-full"
+        >
         <Send className="h-5 w-5" />
-      </button>
+        </Button>
+      </div>
+      <p className="mt-2 text-xs text-muted-foreground">
+        Press Enter to send. Use Shift+Enter for a newline.
+      </p>
     </div>
   )
 }

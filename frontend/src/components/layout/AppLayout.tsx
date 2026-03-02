@@ -19,7 +19,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
   }
 
   return (
-    <div className="flex h-dvh">
+    <div className="flex h-dvh min-h-0">
       {/* Mobile toggle button */}
       <button
         onClick={toggleSidebar}
@@ -59,7 +59,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
       <main
         role="main"
         aria-label="Main content"
-        className="flex-1 flex flex-col overflow-hidden"
+        className="flex-1 min-h-0 flex flex-col overflow-hidden"
       >
         {children}
       </main>

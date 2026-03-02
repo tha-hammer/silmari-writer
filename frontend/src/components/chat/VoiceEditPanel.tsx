@@ -1,6 +1,8 @@
 'use client';
 
 import { Mic, Square, Undo2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { useVoiceEdit } from '@/hooks/useVoiceEdit';
 import { useRealtimeSession } from '@/hooks/useRealtimeSession';
 import { useConversationStore } from '@/lib/store';
@@ -17,16 +19,17 @@ export default function VoiceEditPanel() {
 
   if (!isActive && !isConnecting) {
     return (
-      <button
+      <Button
         onClick={() => {
           void startEditing();
         }}
         aria-label="Voice Edit"
-        className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm bg-muted text-muted-foreground hover:bg-muted/80"
+        variant="secondary"
+        size="sm"
       >
         <Mic className="h-4 w-4" />
         Voice Edit
-      </button>
+      </Button>
     );
   }
 
@@ -34,29 +37,31 @@ export default function VoiceEditPanel() {
     <div className="flex items-center gap-2">
       <VoiceSessionTimer timeRemaining={timeRemaining} />
 
-      <button
+      <Button
         onClick={undo}
         disabled={!hasEdits}
         aria-label="Undo"
-        className="flex items-center gap-1 px-2 py-1 rounded text-sm text-muted-foreground hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
+        variant="ghost"
+        size="sm"
       >
         <Undo2 className="h-3.5 w-3.5" />
         Undo
-      </button>
+      </Button>
 
-      <button
+      <Button
         onClick={stopEditing}
         aria-label="Stop"
-        className="flex items-center gap-1 px-2 py-1 rounded text-sm bg-red-100 text-red-700 hover:bg-red-200"
+        variant="destructive"
+        size="sm"
       >
         <Square className="h-3.5 w-3.5" />
         Stop
-      </button>
+      </Button>
 
       {isConnecting && (
-        <span className="text-sm text-muted-foreground animate-pulse">
+        <Badge variant="outline" className="animate-pulse text-muted-foreground">
           Connecting...
-        </span>
+        </Badge>
       )}
     </div>
   );

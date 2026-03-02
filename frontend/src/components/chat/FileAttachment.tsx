@@ -2,6 +2,9 @@
 
 import { useState, useRef, DragEvent, ChangeEvent } from 'react'
 import { Paperclip, X, Upload, FileAudio } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
 import { formatBytes } from '@/lib/utils'
 
 const DEFAULT_MAX_SIZE_BYTES = 10 * 1024 * 1024 // 10MB
@@ -151,9 +154,9 @@ export default function FileAttachment({
   }
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       {/* Drop zone */}
-      <div
+      <Card
         data-testid="dropzone"
         data-drag-active={dragActive}
         onDragEnter={handleDragEnter}
@@ -161,34 +164,35 @@ export default function FileAttachment({
         onDragOver={handleDragOver}
         onDrop={handleDrop}
         className={`
-          border-2 border-dashed rounded-lg p-4 text-center transition-colors
-          ${dragActive ? 'border-primary bg-primary/10' : 'border-border hover:border-primary/50'}
+          border-2 border-dashed transition-colors
+          ${dragActive ? 'border-primary bg-accent/60' : 'border-border hover:border-primary/50'}
         `}
       >
-        <input
-          ref={inputRef}
-          type="file"
-          data-testid="file-input"
-          multiple
-          onChange={handleFileInput}
-          className="hidden"
-        />
+        <CardContent className="flex flex-col items-center gap-2 px-4 py-5 text-center text-muted-foreground">
+          <input
+            ref={inputRef}
+            type="file"
+            data-testid="file-input"
+            multiple
+            onChange={handleFileInput}
+            className="hidden"
+          />
 
-        <div className="flex flex-col items-center gap-2 text-muted-foreground">
           <Upload className="h-8 w-8" />
-          <p>Drag and drop files here, or</p>
-          <button
+          <p className="text-sm font-medium">Drag and drop files here, or</p>
+          <Button
             type="button"
             onClick={handleAttachClick}
             aria-label="Attach files"
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-secondary text-secondary-foreground hover:bg-secondary/80 transition-colors"
+            variant="outline"
+            size="sm"
           >
             <Paperclip className="h-4 w-4" />
             Attach files
-          </button>
-          <p className="text-sm">Max {formatBytes(maxSizeBytes)} per file</p>
-        </div>
-      </div>
+          </Button>
+          <p className="text-xs">Max {formatBytes(maxSizeBytes)} per file</p>
+        </CardContent>
+      </Card>
 
       {/* Error message */}
       {error && (
@@ -207,7 +211,7 @@ export default function FileAttachment({
             return (
               <li
                 key={`${file.name}-${index}`}
-                className="flex items-center justify-between p-2 rounded-md bg-secondary/50"
+                className="flex items-center justify-between rounded-lg border bg-card px-3 py-2"
               >
                 <div className="flex items-center gap-2 min-w-0">
                   {isAudio ? (
@@ -215,32 +219,34 @@ export default function FileAttachment({
                   ) : (
                     <Paperclip className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
                   )}
-                  <span className="truncate">{file.name}</span>
-                  <span className="text-sm text-muted-foreground flex-shrink-0">
+                  <span className="truncate text-sm">{file.name}</span>
+                  <Badge variant="outline" className="ml-1 flex-shrink-0">
                     {formatBytes(file.size)}
-                  </span>
+                  </Badge>
                 </div>
                 <div className="flex items-center gap-2">
                   {isAudio && onTranscribeFile && (
-                    <button
+                    <Button
                       type="button"
                       onClick={() => handleTranscribe(file, index)}
                       disabled={isTranscribing}
                       aria-label={`Transcribe ${file.name}`}
-                      className="px-3 py-1 text-sm rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      size="sm"
                     >
                       {isTranscribing ? 'Transcribing...' : 'Transcribe'}
-                    </button>
+                    </Button>
                   )}
-                  <button
+                  <Button
                     type="button"
                     onClick={() => removeFile(index)}
                     aria-label={`Remove ${file.name}`}
                     disabled={isTranscribing}
-                    className="p-1 rounded-md hover:bg-destructive/20 text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-muted-foreground hover:text-destructive"
                   >
                     <X className="h-4 w-4" />
-                  </button>
+                  </Button>
                 </div>
               </li>
             )

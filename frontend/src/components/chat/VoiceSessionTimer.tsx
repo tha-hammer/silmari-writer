@@ -1,4 +1,5 @@
 import { Clock } from 'lucide-react';
+import { cn } from '@/lib/cn';
 
 interface VoiceSessionTimerProps {
   timeRemaining: number | null;
@@ -22,7 +23,10 @@ export default function VoiceSessionTimer({ timeRemaining }: VoiceSessionTimerPr
   return (
     <div
       data-testid="voice-session-timer"
-      className={`flex items-center gap-1 text-sm font-mono ${getTimerColor(timeRemaining)}`}
+      className={cn(
+        'inline-flex items-center gap-1 rounded-md border bg-background px-2 py-1 text-sm font-mono',
+        getTimerColor(timeRemaining),
+      )}
     >
       <Clock className="h-3.5 w-3.5" />
       {formatTime(timeRemaining)}

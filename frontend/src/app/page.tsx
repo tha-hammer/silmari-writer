@@ -203,9 +203,9 @@ export default function HomePage() {
 
   return (
     <AppLayout>
-      <div className="flex flex-1 min-h-0 overflow-hidden">
+      <div className="flex flex-1 min-h-0 overflow-hidden bg-background">
         {/* Sidebar */}
-        <div className="w-64 border-r border-border bg-card hidden lg:block">
+        <div className="hidden w-64 border-r border-border bg-card/80 lg:block">
           <div className="p-4">
             <h2 className="text-lg font-semibold mb-4">Projects</h2>
           </div>
@@ -221,7 +221,7 @@ export default function HomePage() {
         <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
           {activeProjectId ? (
             <>
-              <div className="flex items-center justify-between border-b px-4 py-2">
+              <div className="flex items-center justify-between border-b bg-background/90 px-4 py-3 backdrop-blur">
                 <p className="text-xs text-muted-foreground">Chat Workspace</p>
                 <Link
                   href="/writer"
@@ -232,10 +232,12 @@ export default function HomePage() {
                 </Link>
               </div>
 
-              <ConversationView messages={activeMessages} />
+              <div className="flex-1 min-h-0 overflow-hidden bg-muted/20">
+                <ConversationView messages={activeMessages} />
+              </div>
 
               {/* Voice controls */}
-              <div className="flex items-center gap-2 px-4 py-1.5 border-t">
+              <div className="flex items-center gap-2 border-t bg-card/70 px-4 py-2">
                 <ReadAloudToggle />
                 <VoiceEditPanel />
               </div>
@@ -264,13 +266,13 @@ export default function HomePage() {
               )}
 
               {/* Input area */}
-              <div className="border-t p-4">
+              <div className="border-t bg-background p-4">
                 <MessageInput
                   onSendMessage={handleSendMessage}
                   disabled={isGenerating || isTranscribing}
                 />
-                <div className="mt-4 flex gap-4">
-                  <div className="flex-1">
+                <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
+                  <div className="min-w-0">
                     <FileAttachment
                       key={fileResetKey}
                       onFilesChange={setFiles}
