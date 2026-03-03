@@ -18,6 +18,12 @@ const EVENT_SINK_MAP: Record<NewPathEventName, TelemetrySink> = {
   interstitial_shown: 'analytics_events',
   interstitial_dismissed_or_continued: 'analytics_events',
   interstitial_abandonment: 'analytics_events',
+  recall_greeting_shown: 'analytics_events',
+  recall_stop_state_presented: 'analytics_events',
+  recall_move_on_intent: 'analytics_events',
+  recall_working_answer_saved: 'analytics_events',
+  recall_turn_persisted: 'analytics_events',
+  recall_turn_recovered: 'analytics_events',
 };
 
 const noopSink: PersistEventFn = async () => {};
@@ -62,4 +68,3 @@ export const TypedTelemetryGateway = {
     }
   },
 } as const;
-

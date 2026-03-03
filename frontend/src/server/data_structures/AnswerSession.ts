@@ -64,6 +64,7 @@ export const AnswerStoryRecordSchema = z.object({
   questionId: z.string().uuid().nullable().optional(),
   status: z.enum(['INIT', 'IN_PROGRESS', 'RECALL', 'COMPLETE', 'VERIFY']),
   content: z.string().optional(),
+  responses: z.array(z.string()).optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });

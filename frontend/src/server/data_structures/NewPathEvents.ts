@@ -41,11 +41,43 @@ export const InterstitialAbandonmentEventSchema = NewPathEventCommonSchema.exten
   dwell_ms: z.number().int().nonnegative(),
 });
 
+export const RecallGreetingShownEventSchema = NewPathEventCommonSchema.extend({
+  greeting_variant: z.enum(['proactive_hello', 'reconnect_hello']),
+});
+
+export const RecallStopStatePresentedEventSchema = NewPathEventCommonSchema.extend({
+  stop_reason: z.enum(['manual_stop', 'move_on_intent']),
+  incomplete_slots: z.array(z.enum(['anchors', 'actions', 'outcomes'])).default([]),
+});
+
+export const RecallMoveOnIntentEventSchema = NewPathEventCommonSchema.extend({
+  transcript_excerpt: z.string().min(1),
+  incomplete_slots_count: z.number().int().nonnegative(),
+});
+
+export const RecallWorkingAnswerSavedEventSchema = NewPathEventCommonSchema.extend({
+  char_count: z.number().int().nonnegative(),
+});
+
+export const RecallTurnPersistedEventSchema = NewPathEventCommonSchema.extend({
+  transcript_length: z.number().int().nonnegative(),
+});
+
+export const RecallTurnRecoveredEventSchema = NewPathEventCommonSchema.extend({
+  turn_count: z.number().int().nonnegative(),
+});
+
 export const NewPathEventSchemas = {
   artifact_copied_to_clipboard: ArtifactCopiedToClipboardEventSchema,
   interstitial_shown: InterstitialShownEventSchema,
   interstitial_dismissed_or_continued: InterstitialDismissedOrContinuedEventSchema,
   interstitial_abandonment: InterstitialAbandonmentEventSchema,
+  recall_greeting_shown: RecallGreetingShownEventSchema,
+  recall_stop_state_presented: RecallStopStatePresentedEventSchema,
+  recall_move_on_intent: RecallMoveOnIntentEventSchema,
+  recall_working_answer_saved: RecallWorkingAnswerSavedEventSchema,
+  recall_turn_persisted: RecallTurnPersistedEventSchema,
+  recall_turn_recovered: RecallTurnRecoveredEventSchema,
 } as const;
 
 export type NewPathEventName = keyof typeof NewPathEventSchemas;
@@ -55,6 +87,12 @@ export type NewPathEventPayloadMap = {
   interstitial_shown: z.infer<typeof InterstitialShownEventSchema>;
   interstitial_dismissed_or_continued: z.infer<typeof InterstitialDismissedOrContinuedEventSchema>;
   interstitial_abandonment: z.infer<typeof InterstitialAbandonmentEventSchema>;
+  recall_greeting_shown: z.infer<typeof RecallGreetingShownEventSchema>;
+  recall_stop_state_presented: z.infer<typeof RecallStopStatePresentedEventSchema>;
+  recall_move_on_intent: z.infer<typeof RecallMoveOnIntentEventSchema>;
+  recall_working_answer_saved: z.infer<typeof RecallWorkingAnswerSavedEventSchema>;
+  recall_turn_persisted: z.infer<typeof RecallTurnPersistedEventSchema>;
+  recall_turn_recovered: z.infer<typeof RecallTurnRecoveredEventSchema>;
 };
 
 export type NewPathEventPayload<T extends NewPathEventName> = NewPathEventPayloadMap[T];
@@ -66,4 +104,3 @@ export function validateNewPathEvent<T extends NewPathEventName>(
   const schema = NewPathEventSchemas[eventName];
   return schema.parse(payload) as NewPathEventPayload<T>;
 }
-

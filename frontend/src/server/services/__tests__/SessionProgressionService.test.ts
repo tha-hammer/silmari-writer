@@ -123,6 +123,7 @@ describe('SessionProgressionService', () => {
         'IN_PROGRESS',
         existingStoryRecord.id,
         transcript,
+        [transcript],
       );
 
       // Returns updated entities

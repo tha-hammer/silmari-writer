@@ -14,6 +14,8 @@ export const GetSessionHandler = {
           state: answerSession.state,
           source: 'answer_session',
           questionId: storyRecord?.questionId ?? null,
+          storyContent: storyRecord?.content ?? null,
+          responses: storyRecord?.responses ?? [],
           createdAt: answerSession.createdAt,
           updatedAt: answerSession.updatedAt,
         };
@@ -25,6 +27,8 @@ export const GetSessionHandler = {
           id: session.id,
           state: session.state,
           source: 'session',
+          storyContent: null,
+          responses: [],
           createdAt: session.createdAt,
           updatedAt: session.updatedAt,
         };

@@ -46,22 +46,29 @@ export const SessionProgressionService = {
     }
 
     // Step 3: Find associated story record
-    const storyRecord = await SessionDAO.findStoryRecordBySessionId(session.id);
-    if (!storyRecord) {
-      throw SessionErrors.InvalidState('No story record found for session');
-    }
+      const storyRecord = await SessionDAO.findStoryRecordBySessionId(session.id);
+      if (!storyRecord) {
+        throw SessionErrors.InvalidState('No story record found for session');
+      }
 
-    // Step 4: Persist updated session + story record (transactional)
-    try {
-      const updatedEntities = await SessionDAO.updateSessionAndStoryRecord(
-        session.id,
-        processorResult.nextState,
-        storyRecord.id,
-        processorResult.updatedContent,
-      );
+      const existingResponses = Array.isArray(storyRecord.responses) ? storyRecord.responses : [];
+      const nextResponses =
+        existingResponses.at(-1) === transcript
+          ? existingResponses
+          : [...existingResponses, transcript];
 
-      return updatedEntities;
-    } catch (error) {
+      // Step 4: Persist updated session + story record (transactional)
+      try {
+        const updatedEntities = await SessionDAO.updateSessionAndStoryRecord(
+          session.id,
+          processorResult.nextState,
+          storyRecord.id,
+          processorResult.updatedContent,
+          nextResponses,
+        );
+
+        return updatedEntities;
+      } catch (error) {
       // Known session errors → rethrow
       if (error instanceof SessionError) {
         throw error;

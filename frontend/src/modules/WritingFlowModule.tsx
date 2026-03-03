@@ -35,6 +35,8 @@ export interface WritingFlowModuleProps {
   initialStep?: WritingFlowStep | string;
   selectedStory?: Story | null;
   sessionId?: string;
+  initialWorkingAnswer?: string | null;
+  initialResponses?: string[];
   onVoiceResponseSaved?: () => Promise<void> | void;
 }
 
@@ -121,6 +123,8 @@ export function WritingFlowModule({
   initialStep,
   selectedStory = null,
   sessionId,
+  initialWorkingAnswer = null,
+  initialResponses = [],
   onVoiceResponseSaved,
 }: WritingFlowModuleProps) {
   const [state, setState] = useState<WritingFlowState>(() => {
@@ -163,6 +167,8 @@ export function WritingFlowModule({
           <RecallScreen
             selectedStory={selectedStory}
             sessionId={sessionId}
+            initialWorkingAnswer={initialWorkingAnswer}
+            initialResponses={initialResponses}
             onVoiceResponseSaved={onVoiceResponseSaved}
           />
         </RecallRenderErrorBoundary>

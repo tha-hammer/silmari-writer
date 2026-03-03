@@ -19,6 +19,7 @@ export interface RecallProgress {
   anchors: number;
   actions: number;
   outcomes: number;
+  incompleteSlots?: Array<'anchors' | 'actions' | 'outcomes'>;
 }
 
 // ---------------------------------------------------------------------------
@@ -29,6 +30,7 @@ export const NEUTRAL_PROGRESS: RecallProgress = {
   anchors: 0,
   actions: 0,
   outcomes: 0,
+  incompleteSlots: ['anchors', 'actions', 'outcomes'],
 };
 
 // ---------------------------------------------------------------------------
@@ -55,6 +57,11 @@ export async function loadRecallProgress(sessionId: string): Promise<RecallProgr
       anchors: typeof data.anchors === 'number' ? data.anchors : 0,
       actions: typeof data.actions === 'number' ? data.actions : 0,
       outcomes: typeof data.outcomes === 'number' ? data.outcomes : 0,
+      incompleteSlots: Array.isArray(data.incompleteSlots)
+        ? data.incompleteSlots.filter((slot: unknown): slot is 'anchors' | 'actions' | 'outcomes' => (
+          slot === 'anchors' || slot === 'actions' || slot === 'outcomes'
+        ))
+        : undefined,
     };
   } catch (error) {
     frontendLogger.error(

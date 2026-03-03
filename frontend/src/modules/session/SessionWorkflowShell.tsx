@@ -184,6 +184,8 @@ export function SessionWorkflowShell({
           initialStep="RECALL"
           selectedStory={selectedStory}
           sessionId={session.id}
+          initialWorkingAnswer={session.storyContent ?? null}
+          initialResponses={session.responses ?? []}
           onVoiceResponseSaved={onVoiceResponseSaved}
         />
       )}

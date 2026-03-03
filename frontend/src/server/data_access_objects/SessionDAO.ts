@@ -79,6 +79,11 @@ function mapAnswerSession(data: Record<string, unknown>): AnswerSession {
 }
 
 function mapStoryRecord(data: Record<string, unknown>): AnswerStoryRecord {
+  const rawResponses = data.responses;
+  const responses = Array.isArray(rawResponses)
+    ? rawResponses.filter((value): value is string => typeof value === 'string')
+    : undefined;
+
   return {
     id: data.id as string,
     // Voice workflow records are linked via voice_session_id.
@@ -87,6 +92,7 @@ function mapStoryRecord(data: Record<string, unknown>): AnswerStoryRecord {
     questionId: (data.question_id as string | null | undefined) ?? null,
     status: data.status as AnswerStoryRecord['status'],
     content: data.content as string | undefined,
+    responses,
     createdAt: data.created_at as string,
     updatedAt: data.updated_at as string,
   };
@@ -409,6 +415,7 @@ export const SessionDAO = {
     newState: AnswerSessionState,
     storyRecordId: string,
     storyContent: string,
+    responses?: string[],
   ): Promise<{ session: AnswerSession; storyRecord: AnswerStoryRecord }> {
     try {
       // Step 1: Update the answer session
@@ -427,9 +434,19 @@ export const SessionDAO = {
       }
 
       // Step 2: Update the story record
+      const storyRecordUpdatePayload: Record<string, unknown> = {
+        status: newState,
+        content: storyContent,
+        updated_at: new Date().toISOString(),
+      };
+
+      if (responses) {
+        storyRecordUpdatePayload.responses = responses;
+      }
+
       const { data: storyData, error: storyError } = await supabase
         .from('story_records')
-        .update({ status: newState, content: storyContent, updated_at: new Date().toISOString() })
+        .update(storyRecordUpdatePayload)
         .eq('id', storyRecordId)
         .select()
         .single();
@@ -505,6 +522,76 @@ export const SessionDAO = {
         throw SessionErrors.PersistenceFailure('No data returned from answer session state update');
       }
       return mapAnswerSession(data);
+    } catch (err) {
+      if (err instanceof SessionError) throw err;
+      throw SessionErrors.PersistenceFailure(`Unexpected: ${(err as Error).message}`);
+    }
+  },
+
+  async updateStoryRecordWorkingAnswer(
+    sessionId: string,
+    content: string,
+  ): Promise<AnswerStoryRecord | null> {
+    try {
+      const storyRecord = await this.findStoryRecordBySessionId(sessionId);
+      if (!storyRecord) {
+        return null;
+      }
+
+      const { data, error } = await supabase
+        .from('story_records')
+        .update({
+          content,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', storyRecord.id)
+        .select()
+        .single();
+
+      if (error) {
+        throw SessionErrors.PersistenceFailure(`Failed to update story record content: ${error.message}`);
+      }
+
+      if (!data) {
+        throw SessionErrors.PersistenceFailure('No data returned from story record content update');
+      }
+
+      return mapStoryRecord(data);
+    } catch (err) {
+      if (err instanceof SessionError) throw err;
+      throw SessionErrors.PersistenceFailure(`Unexpected: ${(err as Error).message}`);
+    }
+  },
+
+  async replaceStoryRecordResponses(
+    sessionId: string,
+    responses: string[],
+  ): Promise<AnswerStoryRecord | null> {
+    try {
+      const storyRecord = await this.findStoryRecordBySessionId(sessionId);
+      if (!storyRecord) {
+        return null;
+      }
+
+      const { data, error } = await supabase
+        .from('story_records')
+        .update({
+          responses,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', storyRecord.id)
+        .select()
+        .single();
+
+      if (error) {
+        throw SessionErrors.PersistenceFailure(`Failed to update story record responses: ${error.message}`);
+      }
+
+      if (!data) {
+        throw SessionErrors.PersistenceFailure('No data returned from story record responses update');
+      }
+
+      return mapStoryRecord(data);
     } catch (err) {
       if (err instanceof SessionError) throw err;
       throw SessionErrors.PersistenceFailure(`Unexpected: ${(err as Error).message}`);

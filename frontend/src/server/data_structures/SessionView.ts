@@ -7,6 +7,8 @@ export const SessionViewSchema = z.object({
   state: z.string().min(1),
   source: SessionViewSourceSchema,
   questionId: z.string().uuid().nullable().optional(),
+  storyContent: z.string().nullable().optional(),
+  responses: z.array(z.string()).optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
