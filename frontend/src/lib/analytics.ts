@@ -1,5 +1,9 @@
 export type ButtonType = 'copy' | 'regenerate' | 'sendToAPI' | 'edit';
-export type EventType = 'button_click' | 'button_outcome' | 'button_timing';
+export type EventType =
+  | 'button_click'
+  | 'button_outcome'
+  | 'button_timing'
+  | 'artifact_copied_to_clipboard';
 export type Outcome = 'success' | 'error';
 
 export interface ButtonClickEvent {
@@ -22,6 +26,15 @@ export interface ButtonTimingEvent {
   startTime: number;
   endTime: number;
   duration: number;
+}
+
+export interface ArtifactCopiedEvent {
+  artifactType: 'answer' | 'outreach' | 'linkedin_post' | 'summary';
+  copySuccess: boolean;
+  timestamp: number;
+  sessionId?: string;
+  userId?: string;
+  companyIdOrName?: string;
 }
 
 export interface AnalyticsEvent {
@@ -66,6 +79,13 @@ export async function trackButtonOutcome(data: ButtonOutcomeEvent): Promise<void
 export async function trackButtonTiming(data: ButtonTimingEvent): Promise<void> {
   await sendAnalyticsEvent({
     eventType: 'button_timing',
+    ...data,
+  });
+}
+
+export async function trackArtifactCopied(data: ArtifactCopiedEvent): Promise<void> {
+  await sendAnalyticsEvent({
+    eventType: 'artifact_copied_to_clipboard',
     ...data,
   });
 }

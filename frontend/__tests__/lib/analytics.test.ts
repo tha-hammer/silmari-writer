@@ -3,6 +3,7 @@ import {
   trackButtonClick,
   trackButtonOutcome,
   trackButtonTiming,
+  trackArtifactCopied,
 } from '@/lib/analytics'
 
 // Mock fetch
@@ -122,6 +123,23 @@ describe('Analytics', () => {
         messageId: 'msg-123',
         timestamp: Date.now(),
       })).resolves.not.toThrow()
+    })
+  })
+
+  describe('trackArtifactCopied', () => {
+    it('sends artifact copy telemetry with success flag', async () => {
+      await trackArtifactCopied({
+        artifactType: 'outreach',
+        copySuccess: true,
+        timestamp: Date.now(),
+      })
+
+      const call = vi.mocked(fetch).mock.calls[0]
+      const body = JSON.parse(call[1]!.body as string)
+
+      expect(body.eventType).toBe('artifact_copied_to_clipboard')
+      expect(body.artifactType).toBe('outreach')
+      expect(body.copySuccess).toBe(true)
     })
   })
 })
