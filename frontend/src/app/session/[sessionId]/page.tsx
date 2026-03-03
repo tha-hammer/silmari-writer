@@ -1,7 +1,10 @@
 'use client';
 
 import { use, useCallback, useEffect, useState } from 'react';
+import { AlertTriangle, Loader2, Workflow } from 'lucide-react';
 import { getSession } from '@/api_contracts/getSession';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent } from '@/components/ui/card';
 import { SessionWorkflowShell } from '@/modules/session/SessionWorkflowShell';
 import type { SessionView } from '@/server/data_structures/SessionView';
 
@@ -85,22 +88,39 @@ export default function SessionPage({ params }: SessionPageProps) {
 
   if (loading) {
     return (
-      <main data-testid="session-page-loading" className="p-6">
-        <p className="text-sm text-muted-foreground">Loading session...</p>
+      <main data-testid="session-page-loading" className="mx-auto w-full max-w-5xl p-6 md:p-8">
+        <Card>
+          <CardContent className="flex items-center gap-2 p-6 text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <p className="text-sm">Loading session...</p>
+          </CardContent>
+        </Card>
       </main>
     );
   }
 
   if (error || !session) {
     return (
-      <main data-testid="session-page-error" className="p-6" role="alert">
-        <p className="text-sm text-red-600">{error ?? 'Session not found.'}</p>
+      <main data-testid="session-page-error" className="mx-auto w-full max-w-5xl p-6 md:p-8" role="alert">
+        <Card className="border-destructive/30 bg-destructive/5">
+          <CardContent className="flex items-start gap-2 p-6 text-destructive">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <p className="text-sm">{error ?? 'Session not found.'}</p>
+          </CardContent>
+        </Card>
       </main>
     );
   }
 
   return (
-    <main data-testid="session-page" className="mx-auto w-full max-w-4xl p-6">
+    <main data-testid="session-page" className="mx-auto w-full max-w-5xl space-y-4 p-6 md:p-8">
+      <div className="flex items-center gap-2">
+        <Badge variant="secondary" className="gap-1">
+          <Workflow className="h-3.5 w-3.5" />
+          Session Flow
+        </Badge>
+        <Badge variant="outline">{session.id.slice(0, 8)}</Badge>
+      </div>
       <SessionWorkflowShell
         session={session}
         onVoiceResponseSaved={refreshSession}

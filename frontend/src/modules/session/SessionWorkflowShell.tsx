@@ -8,6 +8,8 @@ import AnswerModule, { type AnswerState } from '@/modules/answer/AnswerModule';
 import FinalizedAnswerModule, {
   type FinalizedAnswerState,
 } from '@/modules/finalizedAnswer/FinalizedAnswerModule';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import type { Story } from '@/server/data_structures/ConfirmStory';
 import type { SessionView } from '@/server/data_structures/SessionView';
 import { mapSessionStateToStage, type WorkflowStage } from './stageMapper';
@@ -97,12 +99,17 @@ export function SessionWorkflowShell({
 
   if (stage === 'UNKNOWN') {
     return (
-      <div data-testid="session-workflow-fallback" role="alert" className="space-y-2">
-        <p className="text-sm font-medium">Unsupported workflow state: {session.state}</p>
-        <p className="text-sm text-muted-foreground">
-          Refresh the page or start a new session from /writer.
-        </p>
-      </div>
+      <Card data-testid="session-workflow-fallback" role="alert" className="border-destructive/30 bg-destructive/5">
+        <CardHeader className="space-y-2">
+          <Badge variant="destructive" className="w-fit">
+            Unsupported Workflow State
+          </Badge>
+          <CardTitle className="text-base">State: {session.state}</CardTitle>
+          <CardDescription>
+            Refresh the page or start a new session from /writer.
+          </CardDescription>
+        </CardHeader>
+      </Card>
     );
   }
 
@@ -115,11 +122,13 @@ export function SessionWorkflowShell({
                 questionId={session.questionId}
                 onConfirmed={(story) => handleStoryConfirmed(story)}
               />
-            )
+          )
           : (
-              <div data-testid="session-workflow-error" role="alert" className="text-sm text-red-600">
-                Missing question context for ORIENT stage.
-              </div>
+              <Card data-testid="session-workflow-error" role="alert" className="border-destructive/30 bg-destructive/5">
+                <CardContent className="p-4 text-sm text-destructive">
+                  Missing question context for ORIENT stage.
+                </CardContent>
+              </Card>
             )
       )}
 
@@ -155,9 +164,11 @@ export function SessionWorkflowShell({
       )}
 
       {uiError && (
-        <div data-testid="session-workflow-error" role="alert" className="text-sm text-red-600">
-          {uiError}
-        </div>
+        <Card data-testid="session-workflow-error" role="alert" className="border-destructive/30 bg-destructive/5">
+          <CardContent className="p-4 text-sm text-destructive">
+            {uiError}
+          </CardContent>
+        </Card>
       )}
     </div>
   );

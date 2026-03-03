@@ -16,8 +16,12 @@
 'use client';
 
 import { useState, useCallback, createContext, useContext } from 'react';
+import { CheckCircle2, Loader2, Mic, TriangleAlert } from 'lucide-react';
 import { RequireAuth, type AuthUser } from '@/access_controls/RequireAuth';
 import { createSession } from '@/api_contracts/createSession';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription } from '@/components/ui/card';
 import { frontendLogger } from '@/logging/index';
 
 // ---------------------------------------------------------------------------
@@ -34,7 +38,8 @@ export interface VoiceSessionContext {
 export interface StartVoiceSessionModuleProps {
   user: AuthUser | null;
   authToken: string | null;
-  onNavigate: (path: string) => void;
+  // eslint-disable-next-line no-unused-vars
+  onNavigate(path: string): void;
 }
 
 // ---------------------------------------------------------------------------
@@ -105,35 +110,51 @@ export default function StartVoiceSessionModule({
   return (
     <RequireAuth user={user} onUnauthenticated={handleUnauthenticated}>
       <SessionContext.Provider value={sessionContext}>
-        <div data-testid="start-voice-session-module">
-          {uiState === 'idle' && (
-            <button
-              onClick={handleStartSession}
-              aria-label="Start Voice-Assisted Session"
-              className="px-4 py-2 text-sm font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
-            >
-              Start Voice-Assisted Session
-            </button>
-          )}
+        <Card data-testid="start-voice-session-module" className="border-border/70 bg-card/80">
+          <CardContent className="space-y-4 p-5">
+            <CardDescription className="flex items-center gap-2 text-sm">
+              <Mic className="h-4 w-4 text-primary" />
+              Launch a new voice-assisted session and route into the active workflow.
+            </CardDescription>
 
-          {uiState === 'loading' && (
-            <div data-testid="loading-indicator">
-              <span className="text-sm">Creating session...</span>
-            </div>
-          )}
+            {uiState === 'idle' && (
+              <Button
+                onClick={handleStartSession}
+                aria-label="Start Voice-Assisted Session"
+                className="w-full sm:w-auto"
+              >
+                Start Voice-Assisted Session
+              </Button>
+            )}
 
-          {uiState === 'success' && (
-            <div data-testid="session-init" className="text-green-600">
-              <span>Session initialized: {sessionContext.state}</span>
-            </div>
-          )}
+            {uiState === 'loading' && (
+              <div data-testid="loading-indicator" className="inline-flex items-center gap-2 rounded-md border bg-muted/50 px-3 py-2">
+                <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                <span className="text-sm">Creating session...</span>
+              </div>
+            )}
 
-          {uiState === 'error' && (
-            <div data-testid="session-error" role="alert" className="text-red-600">
-              <span>{error || 'An unexpected error occurred'}</span>
-            </div>
-          )}
-        </div>
+            {uiState === 'success' && (
+              <div data-testid="session-init" className="inline-flex items-center gap-2 text-green-700">
+                <CheckCircle2 className="h-4 w-4" />
+                <Badge variant="outline" className="border-green-600/30 bg-green-500/10 text-green-700">
+                  Session initialized: {sessionContext.state}
+                </Badge>
+              </div>
+            )}
+
+            {uiState === 'error' && (
+              <div
+                data-testid="session-error"
+                role="alert"
+                className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-destructive"
+              >
+                <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>{error || 'An unexpected error occurred'}</span>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </SessionContext.Provider>
     </RequireAuth>
   );
