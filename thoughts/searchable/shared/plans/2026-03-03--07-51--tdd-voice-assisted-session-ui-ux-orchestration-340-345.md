@@ -100,6 +100,14 @@ All findings from [`2026-03-03--07-51--tdd-voice-assisted-session-ui-ux-orchestr
 - [x] Endpoint rollout strategy is explicit via feature flags for new endpoint families.
 - [x] Authorization policy is explicit for user-scoped routes.
 
+## Implementation Gap Addendum (2026-03-03)
+Targeted review against the current implementation found one additional missed function in the 340-345 scope:
+
+- [ ] Behavior 9 telemetry ingestion endpoint is missing.
+  - Evidence: client telemetry emits to `POST /api/telemetry/new-path-events` from `frontend/src/lib/newPathTelemetryClient.ts`, but no corresponding route exists under `frontend/src/app/api/telemetry/new-path-events/route.ts`.
+  - Impact: interstitial telemetry emits can fail at runtime (observed `405 Method Not Allowed` in `new-path-events` testing), breaking required observability coverage for `interstitial_shown`, `interstitial_dismissed_or_continued`, and `interstitial_abandonment`.
+  - Tracking: `silmari-writer-nzo` (bug) and umbrella `silmari-writer-xa5` updated.
+
 ## Cross-Cutting Contracts (Required Before Behavior Work)
 
 ### API Contract Layer + Rollout

@@ -2,7 +2,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import WriterPage from '../page';
-import { createSession } from '@/api_contracts/createSession';
+import { startSessionFromUrl } from '@/api_contracts/startSessionFromUrl';
 
 const mockPush = vi.fn();
 
@@ -12,11 +12,12 @@ vi.mock('next/navigation', () => ({
   }),
 }));
 
-vi.mock('@/api_contracts/createSession', () => ({
-  createSession: vi.fn(),
+vi.mock('@/api_contracts/startSessionFromUrl', () => ({
+  startSessionFromUrl: vi.fn(),
 }));
 
-const mockCreateSession = vi.mocked(createSession);
+const mockStartSessionFromUrl = vi.mocked(startSessionFromUrl);
+const sourceUrl = 'https://example.greenhouse.io/job/123';
 
 describe('WriterPage start-session flow', () => {
   beforeEach(() => {
@@ -25,13 +26,16 @@ describe('WriterPage start-session flow', () => {
 
   it('navigates to /session/[id] after successful session creation', async () => {
     const user = userEvent.setup();
-    mockCreateSession.mockResolvedValue({
+    mockStartSessionFromUrl.mockResolvedValue({
       sessionId: '550e8400-e29b-41d4-a716-446655440000',
-      state: 'INIT',
+      state: 'initialized',
+      canonicalUrl: sourceUrl,
+      contextSummary: 'Context extracted from example.greenhouse.io (direct URL).',
     });
 
     render(<WriterPage />);
 
+    await user.type(screen.getByLabelText(/job posting url/i), sourceUrl);
     await user.click(screen.getByRole('button', { name: /start voice-assisted session/i }));
 
     await waitFor(() => {
@@ -41,15 +45,27 @@ describe('WriterPage start-session flow', () => {
 
   it('shows an error and keeps user on /writer when session creation fails', async () => {
     const user = userEvent.setup();
-    mockCreateSession.mockRejectedValue(new Error('Network failure'));
+    mockStartSessionFromUrl.mockRejectedValue(new Error('Network failure'));
 
     render(<WriterPage />);
 
+    await user.type(screen.getByLabelText(/job posting url/i), sourceUrl);
     await user.click(screen.getByRole('button', { name: /start voice-assisted session/i }));
 
     await waitFor(() => {
       expect(screen.getByRole('alert')).toHaveTextContent('Network failure');
     });
     expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  it('requires URL input before starting session', async () => {
+    const user = userEvent.setup();
+
+    render(<WriterPage />);
+
+    await user.click(screen.getByRole('button', { name: /start voice-assisted session/i }));
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Paste a job URL to continue.');
+    expect(mockStartSessionFromUrl).not.toHaveBeenCalled();
   });
 });

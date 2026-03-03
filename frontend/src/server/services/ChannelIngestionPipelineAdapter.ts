@@ -4,7 +4,7 @@ import { ChannelIngestionErrors } from '@/server/error_definitions/ChannelIngest
 interface ChannelInitInput {
   userId: string;
   sourceUrl: string;
-  channel: 'email' | 'sms';
+  channel: 'email' | 'sms' | 'direct';
 }
 
 interface ChannelInitResult {
@@ -43,7 +43,10 @@ export const ChannelIngestionPipelineAdapter = {
       return {
         id: initialized.id,
         state: 'initialized',
-        contextSummary: `Context extracted from ${host} (${input.channel}).`,
+        contextSummary:
+          input.channel === 'direct'
+            ? `Context extracted from ${host} (direct URL).`
+            : `Context extracted from ${host} (${input.channel}).`,
       };
     } catch (error) {
       throw ChannelIngestionErrors.PipelineInitFailed(
@@ -52,4 +55,3 @@ export const ChannelIngestionPipelineAdapter = {
     }
   },
 } as const;
-

@@ -8,6 +8,7 @@ describe('stageMapper', () => {
   });
 
   it('maps recall and review-adjacent states to RECALL_REVIEW stage', () => {
+    expect(mapSessionStateToStage('initialized')).toBe('RECALL_REVIEW');
     expect(mapSessionStateToStage('IN_PROGRESS')).toBe('RECALL_REVIEW');
     expect(mapSessionStateToStage('RECALL')).toBe('RECALL_REVIEW');
     expect(mapSessionStateToStage('VERIFY')).toBe('RECALL_REVIEW');

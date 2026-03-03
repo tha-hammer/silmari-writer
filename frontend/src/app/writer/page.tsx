@@ -31,7 +31,7 @@ export default function WriterPage() {
           <div className="space-y-1">
             <CardTitle className="text-2xl md:text-3xl">Writer Workflow</CardTitle>
             <CardDescription className="text-sm md:text-base">
-              Start a voice-assisted session and continue through orientation, recall, review, and
+              Start with a job URL, initialize context, and continue through recall, review, and
               finalization.
             </CardDescription>
           </div>
@@ -39,7 +39,7 @@ export default function WriterPage() {
 
         <CardContent className="relative z-10 space-y-4">
           <div className="grid gap-2 text-sm text-muted-foreground md:grid-cols-3">
-            <p>1. Start session</p>
+            <p>1. Paste URL</p>
             <p>2. Capture evidence</p>
             <p>3. Finalize response</p>
           </div>

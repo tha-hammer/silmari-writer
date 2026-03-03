@@ -13,6 +13,7 @@ export interface StageMappingOptions {
 
 const STAGE_BY_STATE: Record<string, WorkflowStage> = {
   INIT: 'ORIENT',
+  initialized: 'RECALL_REVIEW',
   ORIENT: 'ORIENT',
 
   IN_PROGRESS: 'RECALL_REVIEW',

@@ -5,17 +5,17 @@
  * Path: 306-initiate-voice-assisted-answer-session
  *
  * TLA+ properties tested:
- * - Reachability: Authenticated user clicks button → createSession() called once
- * - TypeInvariant: Request matches CreateSessionRequest Zod schema
- * - ErrorConsistency: Unauthenticated user → redirect to /login, createSession NOT called
+ * - Reachability: Authenticated user submits URL → startSessionFromUrl() called once
+ * - TypeInvariant: Request matches StartSessionFromUrlRequest Zod schema
+ * - ErrorConsistency: Unauthenticated user → redirect to /login, startSessionFromUrl NOT called
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 
 // Mock dependencies
-vi.mock('@/api_contracts/createSession', () => ({
-  createSession: vi.fn(),
+vi.mock('@/api_contracts/startSessionFromUrl', () => ({
+  startSessionFromUrl: vi.fn(),
 }));
 
 vi.mock('@/logging/index', () => ({
@@ -27,10 +27,10 @@ vi.mock('@/logging/index', () => ({
 }));
 
 import StartVoiceSessionModule from '../StartVoiceSessionModule';
-import { createSession } from '@/api_contracts/createSession';
+import { startSessionFromUrl } from '@/api_contracts/startSessionFromUrl';
 import { frontendLogger } from '@/logging/index';
 
-const mockCreateSession = vi.mocked(createSession);
+const mockStartSessionFromUrl = vi.mocked(startSessionFromUrl);
 const mockLogger = vi.mocked(frontendLogger);
 
 // ---------------------------------------------------------------------------
@@ -39,6 +39,7 @@ const mockLogger = vi.mocked(frontendLogger);
 
 const authenticatedUser = { id: 'user-abc123' };
 const authToken = 'valid-token-abc123';
+const sourceUrl = 'https://example.greenhouse.io/job/123';
 
 function renderModule(overrides: {
   user?: { id: string } | null;
@@ -72,45 +73,58 @@ describe('StartVoiceSessionModule - Step 1: User initiates voice session', () =>
   // -------------------------------------------------------------------------
 
   describe('Reachability', () => {
-    it('should call createSession() when authenticated user clicks Start button', async () => {
-      mockCreateSession.mockResolvedValue({
+    it('should call startSessionFromUrl() when authenticated user submits URL', async () => {
+      mockStartSessionFromUrl.mockResolvedValue({
         sessionId: '550e8400-e29b-41d4-a716-446655440000',
-        state: 'INIT',
+        state: 'initialized',
+        canonicalUrl: sourceUrl,
+        contextSummary: 'Context extracted from example.greenhouse.io (direct URL).',
       });
 
       renderModule();
 
+      fireEvent.change(screen.getByLabelText(/job posting url/i), {
+        target: { value: sourceUrl },
+      });
       const button = screen.getByRole('button', { name: /Start Voice-Assisted Session/i });
       fireEvent.click(button);
 
       await waitFor(() => {
-        expect(mockCreateSession).toHaveBeenCalledTimes(1);
+        expect(mockStartSessionFromUrl).toHaveBeenCalledTimes(1);
       });
     });
 
-    it('should call createSession with the auth token', async () => {
-      mockCreateSession.mockResolvedValue({
+    it('should call startSessionFromUrl with auth token and URL', async () => {
+      mockStartSessionFromUrl.mockResolvedValue({
         sessionId: '550e8400-e29b-41d4-a716-446655440000',
-        state: 'INIT',
+        state: 'initialized',
+        canonicalUrl: sourceUrl,
+        contextSummary: 'Context extracted from example.greenhouse.io (direct URL).',
       });
 
       renderModule();
 
+      fireEvent.change(screen.getByLabelText(/job posting url/i), {
+        target: { value: sourceUrl },
+      });
       const button = screen.getByRole('button', { name: /Start Voice-Assisted Session/i });
       fireEvent.click(button);
 
       await waitFor(() => {
-        expect(mockCreateSession).toHaveBeenCalledWith(authToken);
+        expect(mockStartSessionFromUrl).toHaveBeenCalledWith(authToken, sourceUrl);
       });
     });
 
     it('should show loading state while creating session', async () => {
       let resolvePromise: (value: any) => void;
       const pendingPromise = new Promise((resolve) => { resolvePromise = resolve; });
-      mockCreateSession.mockReturnValue(pendingPromise as any);
+      mockStartSessionFromUrl.mockReturnValue(pendingPromise as any);
 
       renderModule();
 
+      fireEvent.change(screen.getByLabelText(/job posting url/i), {
+        target: { value: sourceUrl },
+      });
       const button = screen.getByRole('button', { name: /Start Voice-Assisted Session/i });
       fireEvent.click(button);
 
@@ -119,7 +133,14 @@ describe('StartVoiceSessionModule - Step 1: User initiates voice session', () =>
       });
 
       // Clean up
-      resolvePromise!({ sessionId: 'id', state: 'INIT' });
+      await act(async () => {
+        resolvePromise!({
+          sessionId: '550e8400-e29b-41d4-a716-446655440000',
+          state: 'initialized',
+          canonicalUrl: sourceUrl,
+          contextSummary: 'Context extracted from example.greenhouse.io (direct URL).',
+        });
+      });
     });
   });
 
@@ -130,13 +151,18 @@ describe('StartVoiceSessionModule - Step 1: User initiates voice session', () =>
   describe('TypeInvariant', () => {
     it('should navigate to /session/[id] on success', async () => {
       const sessionId = '550e8400-e29b-41d4-a716-446655440000';
-      mockCreateSession.mockResolvedValue({
+      mockStartSessionFromUrl.mockResolvedValue({
         sessionId,
-        state: 'INIT',
+        state: 'initialized',
+        canonicalUrl: sourceUrl,
+        contextSummary: 'Context extracted from example.greenhouse.io (direct URL).',
       });
 
       const { onNavigate } = renderModule();
 
+      fireEvent.change(screen.getByLabelText(/job posting url/i), {
+        target: { value: sourceUrl },
+      });
       const button = screen.getByRole('button', { name: /Start Voice-Assisted Session/i });
       fireEvent.click(button);
 
@@ -165,7 +191,7 @@ describe('StartVoiceSessionModule - Step 1: User initiates voice session', () =>
       expect(onNavigate).toHaveBeenCalledWith('/login');
     });
 
-    it('should NOT call createSession when user is not authenticated', () => {
+    it('should NOT call startSessionFromUrl when user is not authenticated', () => {
       const onNavigate = vi.fn();
 
       render(
@@ -176,7 +202,7 @@ describe('StartVoiceSessionModule - Step 1: User initiates voice session', () =>
         />,
       );
 
-      expect(mockCreateSession).not.toHaveBeenCalled();
+      expect(mockStartSessionFromUrl).not.toHaveBeenCalled();
     });
 
     it('should redirect to /login when authToken is null and button clicked', async () => {
@@ -190,18 +216,24 @@ describe('StartVoiceSessionModule - Step 1: User initiates voice session', () =>
         />,
       );
 
+      fireEvent.change(screen.getByLabelText(/job posting url/i), {
+        target: { value: sourceUrl },
+      });
       const button = screen.getByRole('button', { name: /Start Voice-Assisted Session/i });
       fireEvent.click(button);
 
       expect(onNavigate).toHaveBeenCalledWith('/login');
-      expect(mockCreateSession).not.toHaveBeenCalled();
+      expect(mockStartSessionFromUrl).not.toHaveBeenCalled();
     });
 
     it('should display error when session creation fails', async () => {
-      mockCreateSession.mockRejectedValue(new Error('Network failure'));
+      mockStartSessionFromUrl.mockRejectedValue(new Error('Network failure'));
 
       renderModule();
 
+      fireEvent.change(screen.getByLabelText(/job posting url/i), {
+        target: { value: sourceUrl },
+      });
       const button = screen.getByRole('button', { name: /Start Voice-Assisted Session/i });
       fireEvent.click(button);
 
@@ -213,10 +245,13 @@ describe('StartVoiceSessionModule - Step 1: User initiates voice session', () =>
     });
 
     it('should log error via frontendLogger when session creation fails', async () => {
-      mockCreateSession.mockRejectedValue(new Error('Network failure'));
+      mockStartSessionFromUrl.mockRejectedValue(new Error('Network failure'));
 
       renderModule();
 
+      fireEvent.change(screen.getByLabelText(/job posting url/i), {
+        target: { value: sourceUrl },
+      });
       const button = screen.getByRole('button', { name: /Start Voice-Assisted Session/i });
       fireEvent.click(button);
 
@@ -227,6 +262,16 @@ describe('StartVoiceSessionModule - Step 1: User initiates voice session', () =>
           expect.objectContaining({ module: 'StartVoiceSessionModule' }),
         );
       });
+    });
+
+    it('should require a URL before starting session', async () => {
+      renderModule();
+
+      const button = screen.getByRole('button', { name: /Start Voice-Assisted Session/i });
+      fireEvent.click(button);
+
+      expect(screen.getByRole('alert')).toHaveTextContent('Paste a job URL to continue.');
+      expect(mockStartSessionFromUrl).not.toHaveBeenCalled();
     });
   });
 });
