@@ -43,7 +43,7 @@ describe('/api/telemetry/new-path-events', () => {
       }),
     });
 
-    const response = await POST(request as any);
+    const response = await POST(request);
     const body = await response.json();
 
     expect(response.status).toBe(202);
@@ -67,11 +67,30 @@ describe('/api/telemetry/new-path-events', () => {
       }),
     });
 
-    const response = await POST(request as any);
+    const response = await POST(request);
     const body = await response.json();
 
     expect(response.status).toBe(400);
     expect(body.code).toBe('INVALID_REQUEST');
+  });
+
+  it('POST returns 400 when request body is invalid JSON', async () => {
+    const request = new Request('http://localhost:3000/api/telemetry/new-path-events', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{"event_name":"interstitial_shown",',
+    });
+
+    const response = await POST(request);
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body).toEqual({
+      code: 'INVALID_REQUEST',
+      message: 'Request body must be valid JSON',
+    });
+    expect(mockNewPathEventLogger.validate).not.toHaveBeenCalled();
+    expect(mockNewPathEventLogger.emit).not.toHaveBeenCalled();
   });
 
   it('POST remains non-blocking when sink persistence fails', async () => {
@@ -93,7 +112,7 @@ describe('/api/telemetry/new-path-events', () => {
       }),
     });
 
-    const response = await POST(request as any);
+    const response = await POST(request);
     const body = await response.json();
 
     expect(response.status).toBe(202);

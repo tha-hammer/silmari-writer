@@ -1,9 +1,12 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { NewPathEventSchemas, type NewPathEventName } from '@/server/data_structures/NewPathEvents';
 import { newPathEventLogger } from '@/server/logging/newPathEventLogger';
+import { logger } from '@/server/logging/logger';
 
 const EVENT_NAMES = Object.keys(NewPathEventSchemas) as [NewPathEventName, ...NewPathEventName[]];
+const PATH = '345-interstitial-overlay-orchestration';
+const RESOURCE = 'cfg-r3d7';
 
 const TelemetryEnvelopeSchema = z.object({
   event_name: z.enum(EVENT_NAMES),
@@ -23,9 +26,18 @@ export async function OPTIONS() {
   });
 }
 
-export async function POST(request: NextRequest) {
+export async function POST(request: Request) {
   try {
-    const rawBody = await request.json();
+    let rawBody: unknown;
+    try {
+      rawBody = await request.json();
+    } catch {
+      return NextResponse.json(
+        { code: 'INVALID_REQUEST', message: 'Request body must be valid JSON' },
+        { status: 400, headers: CORS_HEADERS },
+      );
+    }
+
     const parsedEnvelope = TelemetryEnvelopeSchema.safeParse(rawBody);
 
     if (!parsedEnvelope.success) {
@@ -66,7 +78,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.error('[telemetry/new-path-events] Unexpected error:', error);
+    logger.error('Unexpected new-path telemetry route error', error, {
+      path: PATH,
+      resource: RESOURCE,
+    });
     return NextResponse.json(
       { code: 'INTERNAL_ERROR', message: 'An unexpected error occurred' },
       { status: 500, headers: CORS_HEADERS },

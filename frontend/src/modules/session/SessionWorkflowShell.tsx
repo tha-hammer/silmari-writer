@@ -8,6 +8,7 @@ import AnswerModule, { type AnswerState } from '@/modules/answer/AnswerModule';
 import FinalizedAnswerModule, {
   type FinalizedAnswerState,
 } from '@/modules/finalizedAnswer/FinalizedAnswerModule';
+import PrimaryEntryWorkflowModule from '@/modules/session/PrimaryEntryWorkflowModule';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import type { Story } from '@/server/data_structures/ConfirmStory';
@@ -74,6 +75,7 @@ export function SessionWorkflowShell({
   const [pendingStage, setPendingStage] = useState<WorkflowStage | null>(null);
   const [selectedStory, setSelectedStory] = useState<Story | null>(null);
   const [uiError, setUiError] = useState<string | null>(null);
+  const [entryWorkflowCompleted, setEntryWorkflowCompleted] = useState(false);
 
   const stage = useMemo<WorkflowStage>(() => {
     if (
@@ -144,6 +146,13 @@ export function SessionWorkflowShell({
     transitionTo('RECALL_REVIEW');
   };
 
+  const shouldRenderPrimaryEntryWorkflow = (
+    session.source === 'answer_session'
+    && session.state === 'INIT'
+    && (!session.questionId || session.questionId.trim() === '')
+    && !entryWorkflowCompleted
+  );
+
   if (stage === 'UNKNOWN') {
     return (
       <Card data-testid="session-workflow-fallback" role="alert" className="border-destructive/30 bg-destructive/5">
@@ -180,14 +189,23 @@ export function SessionWorkflowShell({
       )}
 
       {stage === 'RECALL_REVIEW' && (
-        <WritingFlowModule
-          initialStep="RECALL"
-          selectedStory={selectedStory}
-          sessionId={session.id}
-          initialWorkingAnswer={session.storyContent ?? null}
-          initialResponses={session.responses ?? []}
-          onVoiceResponseSaved={onVoiceResponseSaved}
-        />
+        shouldRenderPrimaryEntryWorkflow
+          ? (
+              <PrimaryEntryWorkflowModule
+                sessionId={session.id}
+                onCompleted={() => setEntryWorkflowCompleted(true)}
+              />
+            )
+          : (
+              <WritingFlowModule
+                initialStep="RECALL"
+                selectedStory={selectedStory}
+                sessionId={session.id}
+                initialWorkingAnswer={session.storyContent ?? null}
+                initialResponses={session.responses ?? []}
+                onVoiceResponseSaved={onVoiceResponseSaved}
+              />
+            )
       )}
 
       {stage === 'DRAFT' && (

@@ -6,6 +6,7 @@ import type { SessionView } from '@/server/data_structures/SessionView';
 
 const mockOrientStoryModule = vi.fn();
 const mockWritingFlowModule = vi.fn();
+const mockPrimaryEntryWorkflowModule = vi.fn();
 
 vi.mock('@/lib/newPathTelemetryClient', () => ({
   emitNewPathClientEvent: vi.fn().mockResolvedValue(true),
@@ -48,6 +49,20 @@ vi.mock('@/modules/WritingFlowModule', () => ({
   }) => {
     mockWritingFlowModule(props);
     return <div data-testid="writing-flow-module" />;
+  },
+}));
+
+vi.mock('@/modules/session/PrimaryEntryWorkflowModule', () => ({
+  default: (props: { onCompleted?: () => void }) => {
+    mockPrimaryEntryWorkflowModule(props);
+    return (
+      <button
+        data-testid="primary-entry-workflow"
+        onClick={() => props.onCompleted?.()}
+      >
+        Complete entry workflow
+      </button>
+    );
   },
 }));
 
@@ -94,11 +109,22 @@ describe('SessionWorkflowShell', () => {
     vi.useRealTimers();
   });
 
-  it('skips ORIENT for INIT answer_session without questionId', () => {
+  it('renders primary entry workflow for INIT answer_session without questionId', () => {
     render(<SessionWorkflowShell session={makeSession('INIT')} />);
-    expect(screen.getByTestId('writing-flow-module')).toBeInTheDocument();
+    expect(screen.getByTestId('primary-entry-workflow')).toBeInTheDocument();
     expect(screen.queryByTestId('orient-story-module')).not.toBeInTheDocument();
     expect(mockOrientStoryModule).not.toHaveBeenCalled();
+    expect(mockWritingFlowModule).not.toHaveBeenCalled();
+  });
+
+  it('enters recall/review after primary entry workflow completion', async () => {
+    const user = userEvent.setup();
+    render(<SessionWorkflowShell session={makeSession('INIT')} />);
+
+    await user.click(screen.getByTestId('primary-entry-workflow'));
+
+    expect(screen.getByTestId('writing-flow-module')).toBeInTheDocument();
+    expect(mockWritingFlowModule).toHaveBeenCalled();
   });
 
   it('renders ORIENT with questionId when available', () => {
