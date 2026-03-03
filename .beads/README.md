@@ -27,7 +27,8 @@ bd update <issue-id> --status in_progress
 bd update <issue-id> --status done
 
 # Sync with git remote
-bd dolt push and bd dolt pull
+bd dolt push
+bd dolt pull
 ```
 
 ### Working with Issues
