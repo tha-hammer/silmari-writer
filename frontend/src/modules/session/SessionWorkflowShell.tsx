@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { OrientStoryModule } from '@/modules/orient-story/OrientStoryModule';
 import { WritingFlowModule } from '@/modules/WritingFlowModule';
 import { ReviewWorkflowModule } from '@/modules/review/ReviewWorkflowModule';
@@ -12,6 +12,11 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import type { Story } from '@/server/data_structures/ConfirmStory';
 import type { SessionView } from '@/server/data_structures/SessionView';
+import InterstitialController from './interstitial/InterstitialController';
+import {
+  mapWorkflowTransitionToInterstitial,
+  type InterstitialTransition,
+} from './interstitial/interstitialMapper';
 import { mapSessionStateToStage, type WorkflowStage } from './stageMapper';
 
 export interface SessionWorkflowShellProps {
@@ -63,24 +68,66 @@ export function SessionWorkflowShell({
   const [stageOverride, setStageOverride] = useState<{
     stage: WorkflowStage;
     seed: string;
+    fromStage: WorkflowStage;
   } | null>(null);
+  const [activeInterstitial, setActiveInterstitial] = useState<InterstitialTransition | null>(null);
+  const [pendingStage, setPendingStage] = useState<WorkflowStage | null>(null);
   const [selectedStory, setSelectedStory] = useState<Story | null>(null);
   const [uiError, setUiError] = useState<string | null>(null);
 
   const stage = useMemo<WorkflowStage>(() => {
-    if (stageOverride && stageOverride.seed === sessionStageSeed) {
+    if (
+      stageOverride
+      && stageOverride.seed === sessionStageSeed
+      && mappedSessionStage === stageOverride.fromStage
+    ) {
       return stageOverride.stage;
     }
 
     return mappedSessionStage;
   }, [mappedSessionStage, sessionStageSeed, stageOverride]);
 
-  const transitionTo = (nextStage: WorkflowStage) => {
-    setUiError(null);
+  useEffect(() => {
+    if (!stageOverride || stageOverride.seed !== sessionStageSeed) {
+      return;
+    }
+
+    if (mappedSessionStage !== stageOverride.fromStage) {
+      setStageOverride(null);
+    }
+  }, [mappedSessionStage, sessionStageSeed, stageOverride]);
+
+  const applyStageOverride = (nextStage: WorkflowStage, fromStage: WorkflowStage) => {
     setStageOverride({
       stage: nextStage,
       seed: sessionStageSeed,
+      fromStage,
     });
+  };
+
+  const transitionTo = (nextStage: WorkflowStage) => {
+    setUiError(null);
+    const interstitial = mapWorkflowTransitionToInterstitial(stage, nextStage);
+
+    if (interstitial) {
+      setPendingStage(nextStage);
+      setActiveInterstitial(interstitial);
+      return;
+    }
+
+    applyStageOverride(nextStage, mappedSessionStage);
+  };
+
+  const handleInterstitialAdvance = () => {
+    if (!activeInterstitial || !pendingStage) {
+      setActiveInterstitial(null);
+      setPendingStage(null);
+      return;
+    }
+
+    applyStageOverride(pendingStage, activeInterstitial.stepBefore);
+    setActiveInterstitial(null);
+    setPendingStage(null);
   };
 
   const handleReviewStageChange = (workflowStage: string) => {
@@ -169,6 +216,15 @@ export function SessionWorkflowShell({
             {uiError}
           </CardContent>
         </Card>
+      )}
+
+      {activeInterstitial && (
+        <InterstitialController
+          transition={activeInterstitial}
+          sessionId={session.id}
+          autoAdvanceReady={true}
+          onAdvance={handleInterstitialAdvance}
+        />
       )}
     </div>
   );

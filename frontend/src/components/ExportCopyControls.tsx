@@ -13,6 +13,7 @@
  */
 
 import { useState } from 'react';
+import ArtifactCopyButton from '@/components/ArtifactCopyButton';
 import { SharedErrors } from '@/server/error_definitions/SharedErrors';
 import type { ExportFormat } from '@/server/data_structures/ExportFormat';
 
@@ -22,7 +23,8 @@ export interface ExportCopyControlsProps {
   locked: boolean;
   content: string;
   onExport: (request: { answerId: string; format: ExportFormat }) => void;
-  onCopy: (request: { answerId: string }) => void;
+  onCopy: (request: { answerId: string }) => Promise<void> | void;
+  onCopyResult?: (result: { success: boolean; errorMessage?: string }) => void;
 }
 
 export default function ExportCopyControls({
@@ -32,6 +34,7 @@ export default function ExportCopyControls({
   content,
   onExport,
   onCopy,
+  onCopyResult,
 }: ExportCopyControlsProps) {
   const [error, setError] = useState<string | null>(null);
 
@@ -50,10 +53,7 @@ export default function ExportCopyControls({
     onExport({ answerId, format });
   };
 
-  const handleCopy = () => {
-    if (!validateState()) return;
-    onCopy({ answerId });
-  };
+  const artifactStatus = finalized && locked ? 'completed' : 'draft';
 
   return (
     <div className="flex flex-col gap-2">
@@ -74,13 +74,22 @@ export default function ExportCopyControls({
           Export Plain Text
         </button>
 
-        <button
+        <ArtifactCopyButton
+          artifactType="answer"
+          status={artifactStatus}
+          content={content}
+          sessionId={answerId}
+          label="Copy to Clipboard"
           className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-md border hover:bg-gray-50 transition-colors"
-          onClick={handleCopy}
-          aria-label="Copy to Clipboard"
-        >
-          Copy to Clipboard
-        </button>
+          copyHandler={async () => {
+            if (!validateState()) {
+              throw SharedErrors.AnswerNotFinalized();
+            }
+
+            await onCopy({ answerId });
+          }}
+          onCopyResult={onCopyResult}
+        />
       </div>
 
       {error && (

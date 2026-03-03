@@ -101,6 +101,7 @@ export default function FinalizedAnswerModule({
         action: 'copy',
         answerId: request.answerId,
       });
+      throw sharedError;
     } finally {
       setIsLoading(false);
     }
@@ -127,6 +128,16 @@ export default function FinalizedAnswerModule({
           content={answer.content}
           onExport={handleExport}
           onCopy={handleCopy}
+          onCopyResult={({ success, errorMessage }) => {
+            if (success) {
+              setSuccess('Answer copied to clipboard');
+              setError(null);
+              return;
+            }
+
+            setSuccess(null);
+            setError(errorMessage ?? SharedErrors.ExportFailed().message);
+          }}
         />
       )}
 

@@ -16,6 +16,10 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ExportFinalizedAnswerRequestSchema } from '@/api_contracts/exportFinalizedAnswer';
 
+vi.mock('@/lib/newPathTelemetryClient', () => ({
+  emitNewPathClientEvent: vi.fn().mockResolvedValue(true),
+}));
+
 import ExportCopyControls from '../ExportCopyControls';
 
 describe('ExportCopyControls — Step 1: Capture export or copy action', () => {
@@ -67,7 +71,9 @@ describe('ExportCopyControls — Step 1: Capture export or copy action', () => {
 
       await userEvent.click(screen.getByRole('button', { name: /copy/i }));
 
-      expect(defaultProps.onCopy).toHaveBeenCalledTimes(1);
+      await waitFor(() => {
+        expect(defaultProps.onCopy).toHaveBeenCalledTimes(1);
+      });
       expect(defaultProps.onCopy).toHaveBeenCalledWith({
         answerId,
       });
@@ -135,17 +141,11 @@ describe('ExportCopyControls — Step 1: Capture export or copy action', () => {
       });
     });
 
-    it('should block copy when not finalized', async () => {
+    it('should hide copy button when not finalized', async () => {
       render(<ExportCopyControls {...defaultProps} finalized={false} />);
 
-      await userEvent.click(screen.getByRole('button', { name: /copy/i }));
-
       expect(defaultProps.onCopy).not.toHaveBeenCalled();
-
-      await waitFor(() => {
-        const errorElement = screen.getByRole('alert');
-        expect(errorElement).toBeInTheDocument();
-      });
+      expect(screen.queryByRole('button', { name: /copy/i })).not.toBeInTheDocument();
     });
   });
 });

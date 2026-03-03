@@ -27,6 +27,10 @@ vi.mock('@/logging/index', () => ({
   },
 }));
 
+vi.mock('@/lib/newPathTelemetryClient', () => ({
+  emitNewPathClientEvent: vi.fn().mockResolvedValue(true),
+}));
+
 import { frontendLogger } from '@/logging/index';
 import ExportCopyControls from '../ExportCopyControls';
 
@@ -131,7 +135,9 @@ describe('ExportCopyDelivery — Step 4: Deliver export or copy result', () => {
 
       await userEvent.click(screen.getByRole('button', { name: /copy/i }));
 
-      expect(onCopy).toHaveBeenCalledTimes(1);
+      await waitFor(() => {
+        expect(onCopy).toHaveBeenCalledTimes(1);
+      });
       expect(mockClipboardWriteText).toHaveBeenCalledWith(answerContent);
     });
   });

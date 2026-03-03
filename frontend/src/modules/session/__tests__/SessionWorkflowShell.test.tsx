@@ -1,11 +1,16 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { SessionWorkflowShell } from '../SessionWorkflowShell';
 import type { SessionView } from '@/server/data_structures/SessionView';
 
 const mockOrientStoryModule = vi.fn();
 const mockWritingFlowModule = vi.fn();
+
+vi.mock('@/lib/newPathTelemetryClient', () => ({
+  emitNewPathClientEvent: vi.fn().mockResolvedValue(true),
+  emitInterstitialAbandonmentEvent: vi.fn().mockResolvedValue('beacon'),
+}));
 
 vi.mock('@/modules/orient-story/OrientStoryModule', () => ({
   OrientStoryModule: (
@@ -85,6 +90,10 @@ describe('SessionWorkflowShell', () => {
     vi.clearAllMocks();
   });
 
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('skips ORIENT for INIT answer_session without questionId', () => {
     render(<SessionWorkflowShell session={makeSession('INIT')} />);
     expect(screen.getByTestId('writing-flow-module')).toBeInTheDocument();
@@ -127,7 +136,7 @@ describe('SessionWorkflowShell', () => {
   });
 
   it('persists confirmed story into WritingFlowModule after ORIENT confirmation', async () => {
-    const user = userEvent.setup();
+    vi.useFakeTimers();
     render(
       <SessionWorkflowShell
         session={{
@@ -137,11 +146,17 @@ describe('SessionWorkflowShell', () => {
       />,
     );
 
-    await user.click(screen.getByTestId('orient-story-module'));
+    fireEvent.click(screen.getByTestId('orient-story-module'));
 
-    await waitFor(() => {
-      expect(screen.getByTestId('writing-flow-module')).toBeInTheDocument();
+    expect(screen.getByTestId('interstitial-controller')).toBeInTheDocument();
+    act(() => {
+      vi.advanceTimersByTime(1499);
     });
+    expect(screen.queryByTestId('writing-flow-module')).not.toBeInTheDocument();
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    expect(screen.getByTestId('writing-flow-module')).toBeInTheDocument();
 
     expect(mockWritingFlowModule.mock.calls.at(-1)?.[0]).toEqual(
       expect.objectContaining({
@@ -152,6 +167,7 @@ describe('SessionWorkflowShell', () => {
         }),
       }),
     );
+
   });
 
   it('advances DRAFT -> FINALIZE -> FINALIZED when callbacks succeed', async () => {
@@ -175,6 +191,21 @@ describe('SessionWorkflowShell', () => {
     await waitFor(() => {
       expect(screen.getByTestId('answer-module')).toBeInTheDocument();
     });
+  });
+
+  it('prefers backend-confirmed stage over temporary override when session updates', async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(<SessionWorkflowShell session={makeSession('DRAFT')} />);
+
+    await user.click(screen.getByTestId('review-workflow-module'));
+    expect(screen.getByTestId('answer-module')).toBeInTheDocument();
+
+    rerender(<SessionWorkflowShell session={makeSession('REVIEW')} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('writing-flow-module')).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId('answer-module')).not.toBeInTheDocument();
   });
 
   it('forwards voice save callback into WritingFlowModule', () => {

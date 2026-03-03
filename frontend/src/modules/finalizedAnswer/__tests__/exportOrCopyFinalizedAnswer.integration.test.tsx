@@ -32,6 +32,10 @@ vi.mock('@/logging/index', () => ({
   },
 }));
 
+vi.mock('@/lib/newPathTelemetryClient', () => ({
+  emitNewPathClientEvent: vi.fn().mockResolvedValue(true),
+}));
+
 import { frontendLogger } from '@/logging/index';
 import FinalizedAnswerModule from '../FinalizedAnswerModule';
 
