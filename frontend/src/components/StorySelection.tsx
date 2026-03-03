@@ -21,6 +21,9 @@ import { AlignmentErrors } from '@/server/error_definitions/AlignmentErrors';
 import type { AlignmentErrorKey } from '@/server/error_definitions/AlignmentErrors';
 import { frontendLogger } from '@/logging/index';
 import { confirmStory } from '@/api_contracts/confirmStory';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { cn } from '@/lib/cn';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -30,7 +33,7 @@ export interface StorySelectionProps {
   stories: Story[];
   questionId: string;
   jobId?: string;
-  onConfirmed?: (confirmedStory: Story, excludedCount: number) => void;
+  onConfirmed?: (_confirmedStory: Story, _excludedCount: number) => void;
   /** @internal Test-only prop to force alignment banner render error */
   _testForceRenderError?: boolean;
 }
@@ -51,7 +54,11 @@ function AlignmentErrorBanner({
   }
 
   return (
-    <div role="alert" data-testid="alignment-error">
+    <div
+      role="alert"
+      data-testid="alignment-error"
+      className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive"
+    >
       {message}
     </div>
   );
@@ -79,7 +86,7 @@ class AlignmentErrorBoundary extends Component<BoundaryProps, BoundaryState> {
     return { hasError: true };
   }
 
-  componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
+  componentDidCatch(error: Error, _errorInfo: ErrorInfo): void {
     frontendLogger.error(
       'AlignmentErrorBanner render failure',
       error,
@@ -93,7 +100,11 @@ class AlignmentErrorBoundary extends Component<BoundaryProps, BoundaryState> {
   render() {
     if (this.state.hasError) {
       return (
-        <div role="alert" data-testid="alignment-error-fallback">
+        <div
+          role="alert"
+          data-testid="alignment-error-fallback"
+          className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive"
+        >
           An error occurred while displaying validation feedback.
         </div>
       );
@@ -119,13 +130,11 @@ export function StorySelection({
   const [error, setError] = useState<string | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [alignmentError, setAlignmentError] = useState<string | null>(null);
-  const [isBlocked, setIsBlocked] = useState(false);
 
   const handleSelect = (storyId: string) => {
     setSelectedStoryId(storyId);
     setValidationError(null);
     setAlignmentError(null);
-    setIsBlocked(false);
     setError(null);
   };
 
@@ -153,7 +162,6 @@ export function StorySelection({
       const message =
         (messageKey && AlignmentErrors[messageKey]) || AlignmentErrors.STORY_MISALIGNED;
       setAlignmentError(message);
-      setIsBlocked(true);
       return;
     }
 
@@ -176,60 +184,81 @@ export function StorySelection({
   };
 
   return (
-    <div data-testid="story-selection">
-      <h3>Select a Story</h3>
+    <Card data-testid="story-selection">
+      <CardHeader>
+        <CardTitle>Select a Story</CardTitle>
+      </CardHeader>
 
-      <div role="radiogroup" aria-label="Available stories">
-        {stories.map((story) => (
-          <label
-            key={story.id}
-            data-testid={`story-option-${story.id}`}
-            className={selectedStoryId === story.id ? 'selected' : ''}
+      <CardContent className="space-y-3">
+        <div role="radiogroup" aria-label="Available stories" className="space-y-2">
+          {stories.map((story) => (
+            <label
+              key={story.id}
+              data-testid={`story-option-${story.id}`}
+              className={cn(
+                'block cursor-pointer rounded-lg border p-3 transition-colors hover:bg-accent/35',
+                selectedStoryId === story.id
+                  ? 'selected border-primary bg-primary/5 ring-1 ring-primary/20'
+                  : 'border-border bg-background',
+              )}
+            >
+              <input
+                type="radio"
+                name="story-selection"
+                value={story.id}
+                checked={selectedStoryId === story.id}
+                onChange={() => handleSelect(story.id)}
+                aria-label={story.title}
+                className="mt-1 h-4 w-4 accent-primary"
+              />
+              <div className="ml-6 -mt-5 space-y-1">
+                <strong className="block text-sm text-foreground">{story.title}</strong>
+                <p className="text-sm leading-relaxed text-muted-foreground">{story.summary}</p>
+              </div>
+            </label>
+          ))}
+        </div>
+
+        {validationError && (
+          <p
+            role="alert"
+            data-testid="validation-error"
+            className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive"
           >
-            <input
-              type="radio"
-              name="story-selection"
-              value={story.id}
-              checked={selectedStoryId === story.id}
-              onChange={() => handleSelect(story.id)}
-              aria-label={story.title}
+            {validationError}
+          </p>
+        )}
+
+        {alignmentError && (
+          <AlignmentErrorBoundary>
+            <AlignmentErrorBanner
+              message={alignmentError}
+              forceError={_testForceRenderError}
             />
-            <div>
-              <strong>{story.title}</strong>
-              <p>{story.summary}</p>
-            </div>
-          </label>
-        ))}
-      </div>
+          </AlignmentErrorBoundary>
+        )}
 
-      {validationError && (
-        <p role="alert" data-testid="validation-error">
-          {validationError}
-        </p>
-      )}
+        {error && (
+          <p
+            role="alert"
+            data-testid="submission-error"
+            className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive"
+          >
+            {error}
+          </p>
+        )}
+      </CardContent>
 
-      {alignmentError && (
-        <AlignmentErrorBoundary>
-          <AlignmentErrorBanner
-            message={alignmentError}
-            forceError={_testForceRenderError}
-          />
-        </AlignmentErrorBoundary>
-      )}
-
-      {error && (
-        <p role="alert" data-testid="submission-error">
-          {error}
-        </p>
-      )}
-
-      <button
-        onClick={handleConfirm}
-        disabled={!selectedStoryId || isSubmitting}
-        data-testid="confirm-button"
-      >
-        {isSubmitting ? 'Confirming...' : 'Confirm Selection'}
-      </button>
-    </div>
+      <CardFooter>
+        <Button
+          onClick={handleConfirm}
+          disabled={!selectedStoryId || isSubmitting}
+          data-testid="confirm-button"
+          className="w-full md:w-auto"
+        >
+          {isSubmitting ? 'Confirming...' : 'Confirm Selection'}
+        </Button>
+      </CardFooter>
+    </Card>
   );
 }

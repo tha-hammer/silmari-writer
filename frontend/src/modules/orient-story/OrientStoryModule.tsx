@@ -13,6 +13,15 @@
 import { useState, useEffect, useCallback } from 'react';
 import { loadOrientStoryData } from '@/data_loaders/loadOrientStoryData';
 import { StorySelection } from '@/components/StorySelection';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
 import type { OrientStoryData, Story } from '@/server/data_structures/ConfirmStory';
 
 // ---------------------------------------------------------------------------
@@ -56,32 +65,45 @@ export function OrientStoryModule({ questionId, jobId, onConfirmed }: OrientStor
   // Loading state
   if (state.phase === 'loading') {
     return (
-      <div data-testid="orient-story-loading">
-        <p>Loading story selection...</p>
-      </div>
+      <Card data-testid="orient-story-loading">
+        <CardContent className="flex items-center gap-3 p-6 text-sm text-muted-foreground">
+          <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-primary" />
+          <p>Loading story selection...</p>
+        </CardContent>
+      </Card>
     );
   }
 
   // Error state
   if (state.phase === 'error') {
     return (
-      <div role="alert" data-testid="orient-story-error">
-        <p>{state.message}</p>
-        <button onClick={fetchData}>Retry</button>
-      </div>
+      <Card role="alert" data-testid="orient-story-error" className="border-destructive/40 bg-destructive/5">
+        <CardHeader className="space-y-2">
+          <Badge variant="destructive" className="w-fit">Unable to Load</Badge>
+          <CardTitle className="text-base">Story selection is temporarily unavailable</CardTitle>
+          <CardDescription className="text-destructive">{state.message}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button variant="destructive" size="sm" onClick={fetchData}>
+            Retry
+          </Button>
+        </CardContent>
+      </Card>
     );
   }
 
   // Confirmed state
   if (state.phase === 'confirmed') {
     return (
-      <div data-testid="orient-story-confirmed">
-        <h2>Story Confirmed</h2>
-        <div data-testid="confirmed-story">
-          <h3>{state.story.title}</h3>
-          <p>{state.story.summary}</p>
-        </div>
-      </div>
+      <Card data-testid="orient-story-confirmed" className="border-green-500/35 bg-green-500/5">
+        <CardHeader className="space-y-2">
+          <Badge variant="secondary" className="w-fit">Story Confirmed</Badge>
+          <CardTitle className="text-base">{state.story.title}</CardTitle>
+        </CardHeader>
+        <CardContent data-testid="confirmed-story" className="text-sm leading-relaxed text-muted-foreground">
+          {state.story.summary}
+        </CardContent>
+      </Card>
     );
   }
 
@@ -94,21 +116,33 @@ export function OrientStoryModule({ questionId, jobId, onConfirmed }: OrientStor
   };
 
   return (
-    <div data-testid="orient-story-module">
-      <section data-testid="question-section">
-        <h2>{question.text}</h2>
-      </section>
+    <div data-testid="orient-story-module" className="space-y-4">
+      <Card data-testid="question-section" className="shadow-sm">
+        <CardHeader className="pb-4">
+          <Badge variant="outline" className="w-fit">Behavioral Question</Badge>
+          <CardTitle className="text-base leading-relaxed md:text-lg">{question.text}</CardTitle>
+        </CardHeader>
+      </Card>
 
-      <section data-testid="requirements-section">
-        <h3>Job Requirements</h3>
-        <ul>
-          {jobRequirements.map((req) => (
-            <li key={req.id}>{req.description}</li>
-          ))}
-        </ul>
-      </section>
+      <Card data-testid="requirements-section" className="shadow-sm">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Job Requirements</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ul className="space-y-2">
+            {jobRequirements.map((req) => (
+              <li
+                key={req.id}
+                className="rounded-md border bg-secondary/25 px-3 py-2 text-sm leading-relaxed text-secondary-foreground"
+              >
+                {req.description}
+              </li>
+            ))}
+          </ul>
+        </CardContent>
+      </Card>
 
-      <section data-testid="stories-section">
+      <section data-testid="stories-section" className="space-y-3">
         <StorySelection
           stories={stories}
           questionId={questionId}
