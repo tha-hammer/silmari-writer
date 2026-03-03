@@ -21,6 +21,8 @@ export interface RecordButtonProps {
   prominent?: boolean;
   disabled?: boolean;
   onClick?: () => void;
+  label?: string;
+  ariaLabel?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -54,6 +56,8 @@ export default function RecordButton({
   prominent = true,
   disabled = false,
   onClick,
+  label = 'Record',
+  ariaLabel = 'Record',
 }: RecordButtonProps) {
   const classes = getButtonClasses(prominent);
 
@@ -64,9 +68,9 @@ export default function RecordButton({
       className={classes}
       disabled={disabled}
       onClick={onClick}
-      aria-label="Record"
+      aria-label={ariaLabel}
     >
-      Record
+      {label}
     </button>
   );
 }

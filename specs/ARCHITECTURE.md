@@ -1,393 +1,170 @@
-# CosmicHR Writer — System Architecture
+# CosmicHR Writer — /writer Voice-Loop Architecture
 
-## System Overview
+## System Scope
+This document describes the production voice-loop architecture as implemented through:
+- `GET /writer` (workflow entry)
+- `GET /session/[sessionId]` (stateful workflow shell)
 
-CosmicHR Writer is an AI-powered voice interview system that helps job seekers produce truthful, high-signal application answers. Candidates speak through a structured voice loop, and the system extracts concrete evidence, verifies claims, and generates polished drafts.
+The implementation is grounded in path specs `293-339` under `specs/orchestration/session-1772314225364/`.
 
-**Primary KPI:** Writer-assisted Application → Interview Conversion Rate
+## Architecture Summary
 
-## Technology Stack
+```text
+Browser
+  /writer
+    -> WriterPage
+    -> StartSessionRouteAdapter
+    -> StartVoiceSessionModule
+    -> POST /api/sessions
+    -> navigate /session/{id}
 
-| Layer | Technology |
-|-------|-----------|
-| Framework | Next.js 16 (App Router) + React 19 + TypeScript 5 |
-| Styling | Tailwind CSS 4 |
-| State Management | Zustand 5 (localStorage persistence) |
-| Validation | Zod 4 |
-| Database | Supabase (PostgreSQL) — DAO layer wired, stub fallback when env unconfigured |
-| LLM Framework | BAML (Boundary ML) |
-| LLM Providers | OpenAI (GPT-5, GPT-5-mini), Anthropic (Claude Opus 4.1, Sonnet 4) |
-| Voice | ElevenLabs (TTS), OpenAI Realtime API (WebRTC), Web Speech API |
-| SMS | Twilio |
-| Storage | Vercel Blob |
-| Testing | Vitest + React Testing Library + Playwright |
-| Deployment | Vercel (sfo1 region) |
-
-## High-Level Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                          Browser (React 19)                         │
-│                                                                     │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────────────┐   │
-│  │  Zustand  │  │   Chat   │  │  Voice   │  │  Domain Workflow │   │
-│  │  Store    │  │   UI     │  │  Panel   │  │  Components      │   │
-│  └──────────┘  └──────────┘  └──────────┘  └──────────────────┘   │
-│       │              │             │                │               │
-│  ┌────┴──────────────┴─────────────┴────────────────┴────────┐     │
-│  │              Frontend Verifiers (Zod)                      │     │
-│  │              API Contracts (typed fetch)                    │     │
-│  └────────────────────────────┬───────────────────────────────┘     │
-└───────────────────────────────┼─────────────────────────────────────┘
-                                │ HTTP
-┌───────────────────────────────┼─────────────────────────────────────┐
-│                    Next.js API Routes (42 endpoints)                │
-│                                                                     │
-│  ┌──────────┐  ┌──────────────┐  ┌──────────────┐  ┌───────────┐  │
-│  │  Filters │→ │   Request    │→ │  Services /   │→ │   DAOs    │  │
-│  │  (Auth)  │  │   Handlers   │  │  Processors   │  │  (Stubs)  │  │
-│  └──────────┘  └──────────────┘  └──────────────┘  └───────────┘  │
-│       │              │                  │                │          │
-│  ┌────┴──────────────┴──────────────────┴────────────────┴───┐     │
-│  │           Server Verifiers (Zod) + Error Definitions       │     │
-│  │           Data Structures (Zod schemas + TS interfaces)    │     │
-│  └────────────────────────────────────────────────────────────┘     │
-└────────────────────────────────┬────────────────────────────────────┘
-                                 │
-        ┌────────────┬───────────┼───────────┬────────────┐
-        ▼            ▼           ▼           ▼            ▼
-   ┌─────────┐ ┌──────────┐ ┌────────┐ ┌─────────┐ ┌──────────┐
-   │Supabase │ │ OpenAI   │ │ BAML   │ │ Twilio  │ │ Vercel   │
-   │ (stub)  │ │ APIs     │ │ LLMs   │ │  SMS    │ │  Blob    │
-   └─────────┘ └──────────┘ └────────┘ └─────────┘ └──────────┘
+  /session/{id}
+    -> SessionPage
+    -> GET /api/sessions/[id]
+    -> SessionWorkflowShell
+       -> ORIENT: OrientStoryModule
+       -> RECALL_REVIEW: WritingFlowModule
+       -> DRAFT: ReviewWorkflowModule
+       -> FINALIZE: AnswerModule
+       -> FINALIZED: FinalizedAnswerModule
 ```
 
-## Voice Loop State Machine
+## Frontend Route Topology
 
-```
-┌──────┐     ┌────────┐     ┌────────┐     ┌────────┐     ┌───────┐
-│ INIT │────→│ ORIENT │────→│ RECALL │────→│ VERIFY │────→│ DRAFT │
-└──────┘     └────────┘     └────────┘     └────────┘     └───────┘
-                              ↑    │                          │
-                              │    │ (min slots met)          │
-                              │    ▼                          ▼
-                              │  re-prompt              ┌────────┐
-                              │                         │ REVIEW │
-                              │                         └────────┘
-                              │                           │    │
-                              └───("not accurate")────────┘    │
-                                                               ▼
-                                                         ┌──────────┐
-                                                         │ FINALIZE │
-                                                         └──────────┘
-                                                               │
-                                                               ▼
-                                                        ┌─────────────┐
-                                                        │FOLLOWUP_SMS │
-                                                        │ (optional)  │
-                                                        └─────────────┘
-```
+### 1. `/writer` bootstrap route
+- File: `frontend/src/app/writer/page.tsx`
+- Responsibility: expose the start-session control and route users into an initialized workflow.
+- Session start path:
+  - `StartSessionRouteAdapter` resolves auth context from `localStorage` (`authToken` fallback: `dev-session-token`).
+  - `StartVoiceSessionModule` gates access with `RequireAuth`.
+  - `createSession()` calls `POST /api/sessions`.
+  - Success path navigates to `/session/{sessionId}`.
 
-### State Descriptions
+### 2. `/session/[sessionId]` workflow route
+- File: `frontend/src/app/session/[sessionId]/page.tsx`
+- Responsibility: hydrate server session state and render the appropriate stage module.
+- Hydration path:
+  - `getSession(sessionId)` -> `GET /api/sessions/[id]`
+  - Renders `SessionWorkflowShell` on success.
 
-| State | Description | Exit Condition |
-|-------|-------------|----------------|
-| INIT | Load resume, job posting, question | Automatic → ORIENT |
-| ORIENT | Confirm question, select story from resume | Story selected → RECALL |
-| RECALL | Voice-driven slot filling (anchors, actions, outcomes) | Minimum slots met → VERIFY |
-| VERIFY | Confirm key claims (metrics, scope, production, security) | All claims resolved → DRAFT |
-| DRAFT | LLM-C generates answer using confirmed claims only | Always → REVIEW |
-| REVIEW | User approves or requests edits | Approved → FINALIZE |
-| FINALIZE | Lock answer, export, store structured data | Complete |
-| FOLLOWUP_SMS | Post-session SMS verification of uncertain claims | Async |
+## UI Stage Mapping
 
-## Server-Side Architecture
+`SessionWorkflowShell` maps backend session states to route-level UI stages.
 
-### Layered Request Flow
+| Backend state | UI stage | Module |
+|---|---|---|
+| `INIT`, `ORIENT` | `ORIENT` | `OrientStoryModule` |
+| `IN_PROGRESS`, `RECALL`, `COMPLETE`, `VERIFY`, `REVIEW` | `RECALL_REVIEW` | `WritingFlowModule` |
+| `DRAFT`, `DRAFT_ENABLED`, `ACTIVE` | `DRAFT` | `ReviewWorkflowModule` |
+| `FINALIZE` | `FINALIZE` | `AnswerModule` |
+| `FINALIZED` | `FINALIZED` | `FinalizedAnswerModule` |
 
-```
+## Server Architecture (request path)
+
+```text
 Route Handler (app/api/*)
-  │
-  ├─→ AuthAndValidationFilter (JWT stub + Zod body validation)
-  │
-  ├─→ Request Handler (stateless, maps DTO → command)
-  │     │
-  │     ├─→ Service (domain logic, orchestration)
-  │     │     │
-  │     │     ├─→ Processor (business rules, transformations)
-  │     │     │     │
-  │     │     │     └─→ Process Chain (multi-step orchestration)
-  │     │     │
-  │     │     ├─→ Verifier (Zod schema validation)
-  │     │     │
-  │     │     └─→ DAO (Supabase stubs)
-  │     │
-  │     └─→ Transformer (data shape conversion)
-  │
-  └─→ Error Definition (typed error → HTTP response)
+  -> Filter (auth/validation where required)
+  -> Request Handler
+  -> Service
+  -> Processor / Process Chain
+  -> DAO (Supabase)
+  -> Typed Error mapping
 ```
 
-### Directory Structure
+### Session bootstrap example (`POST /api/sessions`)
+- `AuthAndValidationFilter.authenticate()` validates Bearer header.
+- `CreateSessionHandler.handle()` validates command shape.
+- `SessionInitializationService.initializeSession()`:
+  1. create `answer_sessions` row (`INIT`)
+  2. create linked `story_records` row (`INIT`)
+  3. rollback session if story creation fails
+- Returns `{ sessionId, state: 'INIT' }`.
 
-```
-frontend/src/
-├── app/api/                    # 42 API route handlers
-├── components/                 # 90 React components
-├── modules/                    # 10 feature modules (41 files)
-├── hooks/                      # Custom React hooks
-├── lib/                        # Utilities, store, types
-├── verifiers/                  # 31 frontend validators
-├── api_contracts/              # 23 typed API client functions
-├── access_controls/            # Route guards
-├── data_loaders/               # Async data fetching
-├── logging/                    # Client-side logging
-├── server/
-│   ├── request_handlers/       # 53 handler classes
-│   ├── services/               # 35 domain services
-│   ├── processors/             # 19 processors
-│   ├── process_chains/         # 25 multi-step chains
-│   ├── transformers/           # 9 data transformers
-│   ├── verifiers/              # 37 server validators
-│   ├── filters/                # Auth filter
-│   ├── data_access_objects/    # 34 DAO stubs
-│   ├── data_structures/        # 36 Zod schemas + interfaces
-│   ├── error_definitions/      # 35 error classes
-│   └── logging/                # 14 structured loggers
-└── baml_src/                   # BAML LLM definitions
-```
+## API Surface for `/writer` Workflow
 
-## API Surface
+### Core workflow endpoints
+| Method | Path | Role |
+|---|---|---|
+| `POST` | `/api/sessions` | Create initial answer session |
+| `GET` | `/api/sessions/[id]` | Hydrate session view for workflow shell |
+| `GET` | `/api/story/orient-context` | Load question + requirements + stories |
+| `POST` | `/api/story/confirm` | Confirm aligned story selection |
+| `POST` | `/api/session/voice-response` | Process transcript and progress session |
+| `POST` | `/api/session/submit-slots` | Re-prompt and collect missing required slots |
+| `POST` | `/api/truth-checks/confirm` | Confirm / deny key claim |
+| `POST` | `/api/verification/initiate` | Start verification flow |
+| `POST` | `/api/review/approve` | Approve reviewed content and advance stage |
+| `POST` | `/api/edit-by-voice` | Apply voice edit instruction in review |
+| `POST` | `/api/answers/[id]/finalize` | Lock finalized answer |
+| `GET` | `/api/answers/[id]/export` | Export finalized answer |
 
-### Session & Workflow (11 endpoints)
-| Method | Path | Purpose |
-|--------|------|---------|
-| POST | `/api/sessions` | Create session |
-| POST | `/api/sessions/initialize` | Full init (resume + job + question) |
-| POST | `/api/sessions/[id]/approve` | Approve session |
-| POST | `/api/sessions/[id]/finalize` | Finalize session |
-| POST | `/api/session/init` | Legacy session init |
-| POST | `/api/session/submit-slots` | Submit recall slots |
-| POST | `/api/session/voice-response` | Process voice response |
-| POST | `/api/orient/story` | Create story record |
-| GET | `/api/story/orient-context` | Get orient context |
-| POST | `/api/story/confirm` | Confirm story selection |
-| POST | `/api/approve-story` | Approve story draft |
+### Supporting endpoints used by the same lifecycle
+| Method | Path | Role |
+|---|---|---|
+| `POST` | `/api/sessions/[id]/approve` | Session approval transition |
+| `POST` | `/api/sessions/[id]/finalize` | Persist finalized session/story state |
+| `POST` | `/api/sms/webhook` | Receive SMS replies |
+| `POST` | `/api/sms/dispute` | Capture SMS dispute in verify/follow-up |
+| `POST` | `/api/analytics` | Emit leading KPI analytics |
+| `POST` | `/api/kpi/primary` | Emit primary KPI event |
 
-### Draft & Review (5 endpoints)
-| Method | Path | Purpose |
-|--------|------|---------|
-| POST | `/api/generate-draft` | Generate from claim set |
-| POST | `/api/draft/generate` | Generate (case/story/session) |
-| POST | `/api/finalize` | Finalize draft workflow |
-| POST | `/api/review/approve` | Approve content in review |
-| POST | `/api/edit-by-voice` | Voice-driven content edit |
+## Data Model (workflow-critical)
 
-### Answer Management (3 endpoints)
-| Method | Path | Purpose |
-|--------|------|---------|
-| PUT | `/api/answers/[id]` | Update answer content |
-| POST | `/api/answers/[id]/finalize` | Finalize and lock answer |
-| GET | `/api/answers/[id]/export` | Export (markdown/plain text) |
+### `answer_sessions`
+- `id`, `user_id`, `state`, `created_at`, `updated_at`
 
-### Verification & Claims (5 endpoints)
-| Method | Path | Purpose |
-|--------|------|---------|
-| POST | `/api/behavioral-question/evaluate` | Evaluate slot completeness |
-| POST | `/api/truth-checks/confirm` | Confirm/deny claim |
-| POST | `/api/verification/initiate` | Start verification flow |
-| GET | `/api/claims/[claimId]/status` | Get claim status |
-| GET | `/api/case/[caseId]/state` | Get case drafting state |
+### `story_records`
+- `id`, `voice_session_id` (legacy fallback `session_id`), `status`, `content`, timestamps
 
-### SMS & Webhooks (2 endpoints)
-| Method | Path | Purpose |
-|--------|------|---------|
-| POST | `/api/sms/webhook` | Twilio inbound SMS |
-| POST | `/api/sms/dispute` | SMS dispute handling |
+### Workflow-linked entities
+- `truth_checks` (verification outcomes)
+- `claims`, `verification_requests`
+- `answers` / `content` (review + finalize)
+- `session_metrics`, `events`, analytics tables
 
-### Voice & Audio (5 endpoints)
-| Method | Path | Purpose |
-|--------|------|---------|
-| POST | `/api/voice/session` | WebRTC SDP exchange (ICE-complete offer → OpenAI Realtime) |
-| POST | `/api/voice/edit` | Voice-driven message edit |
-| POST | `/api/voice-session/start` | Consent-gated voice start |
-| POST | `/api/transcribe` | Whisper audio transcription |
-| POST | `/api/upload` | Vercel Blob file upload |
+## Realtime Voice Architecture
 
-### Analytics & KPI (3 endpoints)
-| Method | Path | Purpose |
-|--------|------|---------|
-| POST | `/api/analytics` | Client telemetry events |
-| POST | `/api/kpi/primary` | Record primary KPI |
-| POST | `/api/onboarding/complete` | Complete onboarding step |
+### WebRTC proxy flow
+1. Client creates offer via `RTCPeerConnection` and waits for ICE completion.
+2. Client posts SDP to `POST /api/voice/session`.
+3. Server proxies to `https://api.openai.com/v1/realtime/calls` using `OPENAI_API_KEY`.
+4. Server returns SDP answer; client sets remote description.
+5. Data channel `oai-events` carries session events and `session.update`.
 
-### AI Tools (5 endpoints)
-| Method | Path | Purpose |
-|--------|------|---------|
-| POST | `/api/generate` | Chat completion (GPT-4o-mini) |
-| POST | `/api/tools/deep-research` | Deep research |
-| GET | `/api/tools/deep-research/[id]/status` | Poll research status |
-| GET | `/api/tools/deep-research/[id]/stream` | SSE research stream |
-| POST | `/api/tools/intent-classification` | Intent classification |
-| POST | `/api/tools/document-generation` | PDF/DOCX/XLSX generation |
-| POST | `/api/tools/image-generation` | Image generation |
+### Voice modes
+- `read_aloud` -> receive-only audio transceiver
+- `voice_edit` -> microphone capture required
 
-## Data Model
+### Session policy
+- Configured limit: 60 minutes (`SESSION_LIMIT_MINUTES`)
+- Server key only; no direct client OpenAI authentication
 
-### Core Entities
+## AI Model Allocation (implemented)
+| Endpoint | Model |
+|---|---|
+| `/api/transcribe` | `whisper-1` |
+| `/api/generate` | `gpt-4o-mini` |
+| `/api/voice/session` | `gpt-4o-realtime-preview` |
+| `/api/voice/edit` | `gpt-4o-mini` |
+| `/api/tools/document-generation` | default `gpt-4o` (supports `gpt-4o-mini`, `gpt-4-turbo`) |
+| `/api/tools/intent-classification` | `gpt-4o-mini` |
+| `/api/tools/deep-research` | OpenAI Responses API (`o4-mini-deep-research-2025-06-26` quick, `o3-deep-research-2025-06-26` thorough) |
 
-```
-sessions ─────────┐
-  │                │
-  ├─ resume_object │
-  ├─ job_object    │
-  ├─ question_object│
-  │                │
-  ├─→ stories ─────┤
-  │     │          │
-  │     └─→ story_records
-  │           │
-  │           ├─→ truth_checks (claim, status, source)
-  │           ├─→ draft_versions
-  │           └─→ story_metrics
-  │
-  ├─→ behavioral_questions
-  │
-  ├─→ claims ──────→ verification_requests
-  │     │                   │
-  │     │                   └─→ delivery_attempts
-  │     │
-  │     └──→ cases ──→ drafting_workflows
-  │
-  ├─→ drafts ──→ answers (finalized, locked)
-  │
-  ├─→ session_metrics
-  │
-  └─→ events (category, timestamp, metadata)
+## Validation and Error Boundaries
+- Zod validation at route inputs and typed API contract boundaries.
+- Typed domain errors mapped to HTTP JSON `{ code, message }`.
+- Frontend modules preserve recoverable UI states when API calls fail.
 
-users
-  ├─→ sms_follow_ups
-  └─→ onboarding
+## Technology Stack (active codebase)
+- Next.js 16.1.2 + React 19.2.3 + TypeScript 5
+- Tailwind CSS 4
+- Zustand 5
+- Zod 4
+- Supabase JS 2 (DAO layer)
+- OpenAI SDK 6
+- Vercel Blob 2
+- Vitest + React Testing Library + Playwright
 
-analytics_events (leading KPI)
-primary_kpi_events (primary KPI)
-```
-
-### Key Enums
-
-| Entity | Status Values |
-|--------|--------------|
-| Session | INIT, IN_PROGRESS, RECALL, COMPLETE, VERIFY, DRAFT, FINALIZE |
-| Answer | DRAFT, COMPLETED, FINALIZED |
-| Claim | UNCERTAIN, CONFIRMED, DENIED, PENDING, UNVERIFIED |
-| Claim (verified) | unverified, verified, not_verified |
-| Verification | pending, confirmed, failed, timed_out |
-| Draft | DRAFT, APPROVED, FINALIZED |
-| Content | DRAFT, REVIEW, APPROVED, FINALIZE |
-| Drafting | allowed, blocked_due_to_unverified_claims |
-
-## LLM Architecture
-
-### Three LLM Roles
-
-| Role | Purpose | Provider |
-|------|---------|----------|
-| LLM-A (Interviewer) | Natural voice questioning, reflective listening | BAML (GPT-5 / Claude) |
-| LLM-B (Coach) | Select optimal next question based on missing slots + fatigue | BAML (GPT-5 / Claude) |
-| LLM-C (Drafter) | Generate final answer from confirmed claims only | BAML (GPT-5 / Claude) |
-
-### BAML Client Configuration
-
-```
-CustomGPT5        → openai-responses/gpt-5 (retry: exponential, max 3)
-CustomGPT5Mini    → openai-responses/gpt-5-mini
-CustomOpus4       → anthropic/claude-opus-4-1-20250805
-CustomSonnet4     → anthropic/claude-sonnet-4-20250514
-CustomHaiku       → anthropic/claude-3-5-haiku-20241022
-CustomFast        → round-robin(GPT5Mini, Haiku)
-OpenaiFallback    → fallback(GPT5Mini, GPT5)
-```
-
-## External Integrations
-
-```
-┌──────────────┐     ┌──────────────┐     ┌──────────────┐
-│   OpenAI     │     │  Anthropic   │     │  ElevenLabs  │
-│              │     │              │     │              │
-│ • GPT-5      │     │ • Opus 4.1   │     │ • TTS        │
-│ • Whisper-1  │     │ • Sonnet 4   │     │              │
-│ • Realtime   │     │ • Haiku      │     │              │
-│ • DALL-E     │     │              │     │              │
-└──────────────┘     └──────────────┘     └──────────────┘
-
-┌──────────────┐     ┌──────────────┐     ┌──────────────┐
-│   Twilio     │     │   Supabase   │     │ Vercel Blob  │
-│              │     │              │     │              │
-│ • SMS send   │     │ • PostgreSQL │     │ • Audio      │
-│ • Webhooks   │     │ • Auth (TBD) │     │ • Files      │
-│              │     │ • Realtime   │     │              │
-└──────────────┘     └──────────────┘     └──────────────┘
-```
-
-## Validation Architecture
-
-Three-layer validation at every boundary:
-
-```
-Layer 1: Route Handler     → Zod.safeParse(rawBody) → 400 on failure
-Layer 2: Frontend Verifier → Zod.safeParse(input)   → blocks API call
-Layer 3: API Contract      → Zod.safeParse(response) → throws on malformed
-```
-
-35 error definition classes ensure typed error propagation with `{ code, message, statusCode }`.
-
-## Testing Strategy
-
-| Type | Count | Framework | Pattern |
-|------|-------|-----------|---------|
-| Unit | 330+ | Vitest | Co-located `__tests__/` dirs |
-| Integration | 45+ | Vitest | `*.integration.test.ts` |
-| E2E | TBD | Playwright | `e2e/` directory |
-
-All 47 path specs have TLA+ formal verification (Reachability, TypeInvariant, ErrorConsistency).
-
-## Deployment Configuration
-
-### Vercel Settings (`vercel.json`)
-
-| Route | maxDuration | Notes |
-|-------|-------------|-------|
-| `/api/upload` | 60s | Vercel Blob `put()` with access fallback |
-| `/api/transcribe` | 60s | Whisper API + retry (up to 3x exponential backoff) |
-| `/api/generate` | 60s | Chat completion + web search tool |
-
-Region: `sfo1`
-
-### Vercel Blob Storage
-
-- Package: `@vercel/blob@^2.0.0`
-- Default access mode: `public` (v2.0.0 only supports public; fallback logic retries with opposite mode on `access must be "..."` errors)
-- Upload flow: client → FormData POST `/api/upload` → `put()` → blob URL returned
-- Transcription flow: blob URL → `getDownloadUrl()` → fetch → Whisper → `del()` cleanup
-- Token: `BLOB_READ_WRITE_TOKEN` env var (required)
-
-### Production Build
-
-- Build command: `baml-cli generate && next build --webpack`
-- Console stripping: `removeConsole` preserves `error` and `warn` levels in production for Vercel log visibility
-- TypeScript: uses `tsconfig.build.json` (excludes test-only types)
-
-### Voice Session (WebRTC)
-
-- SDP exchange: client creates `RTCPeerConnection` → ICE gathering → SDP offer via `/api/voice/session` proxy → OpenAI Realtime API
-- ICE gathering: awaits `iceGatheringState === 'complete'` before extracting `localDescription.sdp`
-- STUN servers: Google public STUN (`stun:stun.l.google.com:19302`)
-- Session timeout: configurable (default 60 minutes)
-- Modes: `read_aloud` (receive-only transceiver), `voice_edit` (microphone required)
-
-## Current Status
-
-- All DAOs are stubs (not wired to Supabase)
-- Auth is stub (presence-only, no JWT verification)
-- 700+ source files, 330+ test files
-- 47 TDD plans implemented with TLA+ verification
-- Production deployed to Vercel (sfo1 region)
+## Implementation Notes
+- Session DAO and service layers are present and wired; some paths still rely on stubs/fallback patterns depending on environment configuration.
+- Voice and editing flows are route-driven under `/writer` and `/session/[sessionId]`, not the legacy root-page flow.

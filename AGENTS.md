@@ -9,7 +9,8 @@ bd ready              # Find available work
 bd show <id>          # View issue details
 bd update <id> --status in_progress  # Claim work
 bd close <id>         # Complete work
-'bd dolt push' and 'bd dolt pull'                # Sync with git
+bd dolt push
+bd dolt pull                                  # Sync with git
 ```
 
 ## Voice & API Architecture
@@ -54,7 +55,8 @@ bd close <id>         # Complete work
 4. **PUSH TO REMOTE** - This is MANDATORY:
    ```bash
    git pull --rebase
-   'bd dolt push' and 'bd dolt pull' 
+   bd dolt push
+   bd dolt pull
    git push
    git status  # MUST show "up to date with origin"
    ```
