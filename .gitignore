@@ -47,6 +47,7 @@ Thumbs.db
 .rlm-act-checkpoints/
 .vercel
 .env*.local
+supabase/.temp/
 
 # Dolt database files (added by bd init)
 .dolt/
