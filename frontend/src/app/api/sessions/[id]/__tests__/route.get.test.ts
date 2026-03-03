@@ -37,6 +37,25 @@ describe('GET /api/sessions/[id]', () => {
     expect(data.state).toBe('INIT');
   });
 
+  it('returns 200 when handler returns legacy null updatedAt', async () => {
+    mockHandle.mockResolvedValue({
+      id: '550e8400-e29b-41d4-a716-446655440000',
+      state: 'ACTIVE',
+      source: 'session',
+      createdAt: '2026-03-02T10:00:00.000Z',
+      updatedAt: null,
+    });
+
+    const response = await GET(
+      new Request('http://localhost/api/sessions/550e8400-e29b-41d4-a716-446655440000'),
+      { params: Promise.resolve({ id: '550e8400-e29b-41d4-a716-446655440000' }) },
+    );
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.updatedAt).toBeNull();
+  });
+
   it('returns 400 when id is not a UUID', async () => {
     const response = await GET(
       new Request('http://localhost/api/sessions/not-a-uuid'),
@@ -75,4 +94,3 @@ describe('GET /api/sessions/[id]', () => {
     expect(data.code).toBe('INTERNAL_ERROR');
   });
 });
-

@@ -15,7 +15,7 @@ import { supabase } from '@/lib/supabase';
 import { SessionErrors } from '@/server/error_definitions/SessionErrors';
 import type { InitializedSession } from '@/server/data_structures/InitializedSession';
 
-interface SessionToPerist {
+interface SessionToPersist {
   resume: InitializedSession['resume'];
   job: InitializedSession['job'];
   question: InitializedSession['question'];
@@ -34,12 +34,18 @@ export const InitializeSessionDAO = {
    *
    * Path: 311-reject-duplicate-session-initialization
    */
-  async getActiveSession(): Promise<InitializedSession | null> {
+  async getActiveSession(userId?: string): Promise<InitializedSession | null> {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('sessions')
         .select()
-        .eq('state', 'initialized')
+        .eq('state', 'initialized');
+
+      if (userId) {
+        query = query.eq('user_id', userId);
+      }
+
+      const { data, error } = await query
         .limit(1)
         .maybeSingle();
 
@@ -79,17 +85,24 @@ export const InitializeSessionDAO = {
    *
    * On DB failure → throws SessionErrors.PersistenceFailure
    */
-  async persist(session: SessionToPerist): Promise<InitializedSession> {
+  async persist(session: SessionToPersist, userId?: string): Promise<InitializedSession> {
     try {
+      const insertPayload: Record<string, unknown> = {
+        resume: session.resume,
+        job: session.job,
+        question: session.question,
+        state: session.state,
+        created_at: session.createdAt,
+        updated_at: session.createdAt,
+      };
+
+      if (userId) {
+        insertPayload.user_id = userId;
+      }
+
       const { data, error } = await supabase
         .from('sessions')
-        .insert({
-          resume: session.resume,
-          job: session.job,
-          question: session.question,
-          state: session.state,
-          created_at: session.createdAt,
-        })
+        .insert(insertPayload)
         .select()
         .single();
 
@@ -115,6 +128,32 @@ export const InitializeSessionDAO = {
 
       throw SessionErrors.PersistenceFailure(
         `Failed to persist session: ${error instanceof Error ? error.message : 'unknown error'}`,
+      );
+    }
+  },
+
+  async supersedeInitializedSession(id: string): Promise<void> {
+    try {
+      const { error } = await supabase
+        .from('sessions')
+        .update({
+          state: 'FINALIZE',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', id);
+
+      if (error) {
+        throw SessionErrors.PersistenceFailure(
+          `Failed to supersede stale session: ${error.message}`,
+        );
+      }
+    } catch (error) {
+      if (error instanceof Error && error.name === 'SessionError') {
+        throw error;
+      }
+
+      throw SessionErrors.PersistenceFailure(
+        `Failed to supersede stale session: ${error instanceof Error ? error.message : 'unknown error'}`,
       );
     }
   },

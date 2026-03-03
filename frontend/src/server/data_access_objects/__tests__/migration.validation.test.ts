@@ -7,6 +7,10 @@ const CONFIRM_STORY_PATCH_PATH = resolve(
   __dirname,
   '../../../../../supabase/migrations/20260302223000_confirm_story_rpc_alignment.sql',
 );
+const SESSIONS_USER_SCOPE_MIGRATION_PATH = resolve(
+  __dirname,
+  '../../../../../supabase/migrations/20260303124500_sessions_user_scope.sql',
+);
 
 describe('SQL Migration Validation', () => {
   it('migration file exists', () => {
@@ -80,5 +84,14 @@ describe('SQL Migration Validation', () => {
   it('has indexes on FK columns', () => {
     const sql = readFileSync(MIGRATION_PATH, 'utf-8').toLowerCase();
     expect(sql).toContain('create index');
+  });
+
+  it('contains sessions user-scope migration with user_id and index', () => {
+    expect(existsSync(SESSIONS_USER_SCOPE_MIGRATION_PATH)).toBe(true);
+    const sql = readFileSync(SESSIONS_USER_SCOPE_MIGRATION_PATH, 'utf-8').toLowerCase();
+
+    expect(sql).toContain('alter table sessions');
+    expect(sql).toContain('add column if not exists user_id');
+    expect(sql).toContain('create index if not exists idx_sessions_user_state');
   });
 });

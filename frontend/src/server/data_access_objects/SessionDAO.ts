@@ -60,11 +60,12 @@ export interface BootstrapQuestionContext {
 }
 
 function mapSession(data: Record<string, unknown>): Session {
+  const createdAt = data.created_at as string;
   return {
     id: data.id as string,
     state: data.state as Session['state'],
-    createdAt: data.created_at as string,
-    updatedAt: data.updated_at as string,
+    createdAt,
+    updatedAt: (data.updated_at ?? createdAt) as string,
   };
 }
 

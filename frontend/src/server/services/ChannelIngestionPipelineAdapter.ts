@@ -38,6 +38,7 @@ export const ChannelIngestionPipelineAdapter = {
         question: {
           text: 'Describe a high-impact project relevant to this opportunity.',
         },
+        userId: input.userId,
       });
 
       return {

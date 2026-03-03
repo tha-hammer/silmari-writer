@@ -135,6 +135,7 @@ describe('Integration: process-voice-input-and-progress-session', () => {
         'IN_PROGRESS',
         existingStoryRecord.id,
         transcript,
+        [transcript],
       );
       // Step 5-6: Result contains updated entities
       expect(result.session.state).toBe('IN_PROGRESS');
@@ -189,6 +190,7 @@ describe('Integration: process-voice-input-and-progress-session', () => {
         'IN_PROGRESS',
         existingStoryRecord.id,
         transcript,
+        [transcript],
       );
       expect(mockDAO.updateSessionAndStoryRecord).toHaveBeenNthCalledWith(
         2,
@@ -196,6 +198,7 @@ describe('Integration: process-voice-input-and-progress-session', () => {
         'RECALL',
         existingStoryRecord.id,
         secondTranscript,
+        [secondTranscript],
       );
     });
   });

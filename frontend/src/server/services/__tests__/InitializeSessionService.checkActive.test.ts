@@ -20,6 +20,7 @@ vi.mock('@/server/data_access_objects/InitializeSessionDAO', () => ({
   InitializeSessionDAO: {
     getActiveSession: vi.fn(),
     persist: vi.fn(),
+    supersedeInitializedSession: vi.fn(),
   },
 }));
 
@@ -84,9 +85,10 @@ describe('InitializeSessionService — Step 2: Check for existing active session
         createdAt: new Date().toISOString(),
       });
 
-      await InitializeSessionService.createSession(validInput);
+      await InitializeSessionService.createSession({ ...validInput, userId: 'user-1' });
 
       expect(mockDAO.getActiveSession).toHaveBeenCalledTimes(1);
+      expect(mockDAO.getActiveSession).toHaveBeenCalledWith('user-1');
     });
 
     it('should call getActiveSession when active session exists (and throw)', async () => {
@@ -101,6 +103,25 @@ describe('InitializeSessionService — Step 2: Check for existing active session
   });
 
   describe('TypeInvariant: getActiveSession returns Session | null', () => {
+    it('should allow session creation when another user has an active initialized session', async () => {
+      mockDAO.getActiveSession.mockResolvedValue(null);
+      mockDAO.persist.mockResolvedValue({
+        id: '770e8400-e29b-41d4-a716-446655440000',
+        ...validInput,
+        state: 'initialized',
+        createdAt: new Date().toISOString(),
+      });
+
+      const result = await InitializeSessionService.createSession({
+        ...validInput,
+        userId: 'user-2',
+      });
+
+      expect(result.state).toBe('initialized');
+      expect(mockDAO.getActiveSession).toHaveBeenCalledWith('user-2');
+      expect(mockDAO.persist).toHaveBeenCalledTimes(1);
+    });
+
     it('should proceed to persist when getActiveSession returns null', async () => {
       mockDAO.getActiveSession.mockResolvedValue(null);
       mockDAO.persist.mockResolvedValue({

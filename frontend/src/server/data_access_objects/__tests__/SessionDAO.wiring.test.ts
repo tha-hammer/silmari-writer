@@ -54,6 +54,17 @@ describe('SessionDAO — Supabase Wiring', () => {
         expect(result!.id).toBe('uuid-1');
         expect(mockFrom).toHaveBeenCalledWith('sessions');
       });
+
+      it('falls back to created_at when updated_at is null', async () => {
+        const row = { id: 'uuid-legacy', state: 'ACTIVE', created_at: '2026-01-01', updated_at: null };
+        mockMaybeSingle.mockResolvedValue({ data: row, error: null });
+
+        const result = await SessionDAO.findById('uuid-legacy');
+
+        expect(result).not.toBeNull();
+        expect(result!.updatedAt).toBe('2026-01-01');
+      });
+
       it('returns null when not found', async () => {
         mockMaybeSingle.mockResolvedValue({ data: null, error: null });
         const result = await SessionDAO.findById('nonexistent');

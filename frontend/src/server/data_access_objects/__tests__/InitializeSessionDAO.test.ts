@@ -45,7 +45,7 @@ describe('InitializeSessionDAO — Step 4: Persist session to storage', () => {
     text: 'Tell me about a time you led a complex technical project.',
   };
 
-  const sessionToPerist = {
+  const sessionToPersist = {
     resume: validResume,
     job: validJob,
     question: validQuestion,
@@ -79,12 +79,82 @@ describe('InitializeSessionDAO — Step 4: Persist session to storage', () => {
 
       mockSupabase.from.mockReturnValue({ insert: mockInsert } as any);
 
-      const result = await InitializeSessionDAO.persist(sessionToPerist);
+      const result = await InitializeSessionDAO.persist(sessionToPersist);
 
       expect(result).toBeDefined();
       expect(result.id).toBe(mockPersistedRow.id);
       expect(result.id).toBeTruthy();
       expect(mockSupabase.from).toHaveBeenCalledWith('sessions');
+    });
+
+    it('should include updated_at in insert payload', async () => {
+      const mockInsert = vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          single: vi.fn().mockResolvedValue({
+            data: mockPersistedRow,
+            error: null,
+          }),
+        }),
+      });
+
+      mockSupabase.from.mockReturnValue({ insert: mockInsert } as any);
+
+      await InitializeSessionDAO.persist(sessionToPersist);
+
+      expect(mockInsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          created_at: sessionToPersist.createdAt,
+          updated_at: sessionToPersist.createdAt,
+        }),
+      );
+    });
+
+    it('should include user_id in insert payload when provided', async () => {
+      const mockInsert = vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          single: vi.fn().mockResolvedValue({
+            data: mockPersistedRow,
+            error: null,
+          }),
+        }),
+      });
+
+      mockSupabase.from.mockReturnValue({ insert: mockInsert } as any);
+
+      await InitializeSessionDAO.persist(sessionToPersist, 'user-1');
+
+      expect(mockInsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          user_id: 'user-1',
+        }),
+      );
+    });
+  });
+
+  describe('Active session lookup', () => {
+    it('scopes active session lookup by user_id when provided', async () => {
+      const mockMaybeSingle = vi.fn().mockResolvedValue({
+        data: null,
+        error: null,
+      });
+      const mockEqUser = vi.fn().mockReturnValue({
+        limit: vi.fn().mockReturnValue({
+          maybeSingle: mockMaybeSingle,
+        }),
+      });
+      const mockEqState = vi.fn().mockReturnValue({
+        eq: mockEqUser,
+      });
+      const mockSelect = vi.fn().mockReturnValue({
+        eq: mockEqState,
+      });
+
+      mockSupabase.from.mockReturnValue({ select: mockSelect } as any);
+
+      await InitializeSessionDAO.getActiveSession('user-1');
+
+      expect(mockEqState).toHaveBeenCalledWith('state', 'initialized');
+      expect(mockEqUser).toHaveBeenCalledWith('user_id', 'user-1');
     });
   });
 
@@ -101,7 +171,7 @@ describe('InitializeSessionDAO — Step 4: Persist session to storage', () => {
 
       mockSupabase.from.mockReturnValue({ insert: mockInsert } as any);
 
-      const result = await InitializeSessionDAO.persist(sessionToPerist);
+      const result = await InitializeSessionDAO.persist(sessionToPersist);
 
       const parsed = InitializedSessionSchema.safeParse(result);
       expect(parsed.success).toBe(true);
@@ -119,7 +189,7 @@ describe('InitializeSessionDAO — Step 4: Persist session to storage', () => {
 
       mockSupabase.from.mockReturnValue({ insert: mockInsert } as any);
 
-      const result = await InitializeSessionDAO.persist(sessionToPerist);
+      const result = await InitializeSessionDAO.persist(sessionToPersist);
 
       expect(result.resume).toEqual(validResume);
       expect(result.job).toEqual(validJob);
@@ -141,7 +211,7 @@ describe('InitializeSessionDAO — Step 4: Persist session to storage', () => {
       mockSupabase.from.mockReturnValue({ insert: mockInsert } as any);
 
       try {
-        await InitializeSessionDAO.persist(sessionToPerist);
+        await InitializeSessionDAO.persist(sessionToPersist);
         expect.fail('Should have thrown');
       } catch (e) {
         expect(e).toBeInstanceOf(SessionError);
@@ -156,7 +226,7 @@ describe('InitializeSessionDAO — Step 4: Persist session to storage', () => {
       });
 
       try {
-        await InitializeSessionDAO.persist(sessionToPerist);
+        await InitializeSessionDAO.persist(sessionToPersist);
         expect.fail('Should have thrown');
       } catch (e) {
         expect(e).toBeInstanceOf(SessionError);

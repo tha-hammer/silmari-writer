@@ -22,6 +22,18 @@ interface CreateSessionInput {
   resume: ResumeObject;
   job: JobObject;
   question: QuestionObject;
+  userId?: string;
+}
+
+const STALE_INITIALIZED_MS = 30 * 60 * 1000;
+
+function isInitializedSessionStale(createdAt: string, nowMs = Date.now()): boolean {
+  const createdMs = Date.parse(createdAt);
+  if (Number.isNaN(createdMs)) {
+    return false;
+  }
+
+  return nowMs - createdMs >= STALE_INITIALIZED_MS;
 }
 
 export const InitializeSessionService = {
@@ -106,10 +118,14 @@ export const InitializeSessionService = {
 
     try {
       // Step 2 (Path 311): Check for existing active session
-      const activeSession = await InitializeSessionDAO.getActiveSession();
+      const activeSession = await InitializeSessionDAO.getActiveSession(input.userId);
 
       // Step 3 (Path 311): Verify uniqueness — throws SESSION_ALREADY_ACTIVE if active
-      SessionUniquenessVerifier.verify(activeSession !== null);
+      if (activeSession && input.userId && isInitializedSessionStale(activeSession.createdAt)) {
+        await InitializeSessionDAO.supersedeInitializedSession(activeSession.id);
+      } else {
+        SessionUniquenessVerifier.verify(activeSession !== null);
+      }
 
       // Step 4 (Path 312): Defense-in-depth persistence guard
       InitializeSessionService.guardPersistence(validationErrors);
@@ -124,7 +140,7 @@ export const InitializeSessionService = {
       };
 
       // Step 6: Delegate persistence to DAO
-      const persisted = await InitializeSessionDAO.persist(sessionEntity);
+      const persisted = await InitializeSessionDAO.persist(sessionEntity, input.userId);
 
       return persisted;
     } catch (error) {

@@ -44,6 +44,11 @@ describe('ChannelIngestionPipelineAdapter.initializeFromUrl', () => {
     });
 
     expect(mockInitialize.createSession).toHaveBeenCalledTimes(1);
+    expect(mockInitialize.createSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'user-1',
+      }),
+    );
     expect(result).toMatchObject({
       id: '550e8400-e29b-41d4-a716-446655440000',
       state: 'initialized',
@@ -51,4 +56,3 @@ describe('ChannelIngestionPipelineAdapter.initializeFromUrl', () => {
     expect(result.contextSummary).toContain('example.greenhouse.io');
   });
 });
-

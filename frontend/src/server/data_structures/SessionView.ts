@@ -10,7 +10,7 @@ export const SessionViewSchema = z.object({
   storyContent: z.string().nullable().optional(),
   responses: z.array(z.string()).optional(),
   createdAt: z.string(),
-  updatedAt: z.string(),
+  updatedAt: z.string().nullable(),
 });
 
 export type SessionView = z.infer<typeof SessionViewSchema>;
