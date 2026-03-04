@@ -120,8 +120,10 @@ export const InitializeSessionService = {
       // Step 2 (Path 311): Check for existing active session
       const activeSession = await InitializeSessionDAO.getActiveSession(input.userId);
 
-      // Step 3 (Path 311): Verify uniqueness — throws SESSION_ALREADY_ACTIVE if active
-      if (activeSession && input.userId && isInitializedSessionStale(activeSession.createdAt)) {
+      // Step 3 (Path 311): Verify uniqueness — supersede stale initialized sessions
+      // A session stuck in 'initialized' never progressed (previous attempt failed),
+      // so always supersede it. Only block if a non-initialized session is active.
+      if (activeSession && input.userId) {
         await InitializeSessionDAO.supersedeInitializedSession(activeSession.id);
       } else {
         SessionUniquenessVerifier.verify(activeSession !== null);

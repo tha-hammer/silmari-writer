@@ -64,7 +64,7 @@ describe('InitializeSessionService stale-session handling', () => {
     expect(mockDAO.persist).toHaveBeenCalledTimes(1);
   });
 
-  it('keeps fresh initialized session blocking with SESSION_ALREADY_ACTIVE', async () => {
+  it('supersedes fresh initialized session instead of blocking', async () => {
     mockDAO.getActiveSession.mockResolvedValue({
       id: '550e8400-e29b-41d4-a716-446655440000',
       resume: validInput.resume,
@@ -73,12 +73,22 @@ describe('InitializeSessionService stale-session handling', () => {
       state: 'initialized',
       createdAt: new Date().toISOString(),
     });
+    mockDAO.supersedeInitializedSession.mockResolvedValue(undefined);
+    mockDAO.persist.mockResolvedValue({
+      id: '660e8400-e29b-41d4-a716-446655440000',
+      resume: validInput.resume,
+      job: validInput.job,
+      question: validInput.question,
+      state: 'initialized',
+      createdAt: new Date().toISOString(),
+    });
 
-    await expect(
-      InitializeSessionService.createSession(validInput),
-    ).rejects.toBeInstanceOf(SessionError);
+    await InitializeSessionService.createSession(validInput);
 
-    expect(mockDAO.persist).not.toHaveBeenCalled();
+    expect(mockDAO.supersedeInitializedSession).toHaveBeenCalledWith(
+      '550e8400-e29b-41d4-a716-446655440000',
+    );
+    expect(mockDAO.persist).toHaveBeenCalledTimes(1);
   });
 
   it('propagates supersede failure and does not persist a new session', async () => {

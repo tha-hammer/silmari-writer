@@ -206,7 +206,7 @@ export async function createVoiceSession(options: VoiceSessionOptions): Promise<
           modalities: ['text', 'audio'],
           voice: 'alloy',
           turn_detection: needsMicrophone ? { type: 'server_vad' } : null,
-          input_audio_transcription: { model: 'gpt-4o-transcribe' },
+          input_audio_transcription: { model: 'whisper-1' },
         },
       };
       if (instructions) {

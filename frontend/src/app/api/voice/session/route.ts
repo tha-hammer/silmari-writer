@@ -23,11 +23,10 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Build session config
+  // Build session config — transcription is configured via data channel session.update
   const sessionConfig: Record<string, unknown> = {
     type: 'realtime',
     model,
-    input_audio_transcription: { model: 'gpt-4o-transcribe' },
   };
 
   if (body.instructions) {
