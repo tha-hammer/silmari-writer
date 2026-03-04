@@ -463,18 +463,20 @@ export default function RecallScreen({
       submittedKeysRef.current.add(finalTranscriptEvent.dedupeKey);
       setSubmitStatus('submitting');
 
+      // Merge transcript into working answer immediately so the UI
+      // updates regardless of whether the backend call succeeds.
+      const mergedAnswer = mergeWorkingAnswer(
+        workingAnswerRef.current,
+        finalTranscriptEvent.transcript,
+      );
+      setWorkingAnswer(mergedAnswer);
+
       void (async () => {
         try {
           await submitVoiceResponse({
             sessionId,
             transcript: finalTranscriptEvent.transcript,
           });
-
-          const mergedAnswer = mergeWorkingAnswer(
-            workingAnswerRef.current,
-            finalTranscriptEvent.transcript,
-          );
-          setWorkingAnswer(mergedAnswer);
 
           await updateSessionWorkingAnswer(sessionId, mergedAnswer).catch(() => undefined);
 
