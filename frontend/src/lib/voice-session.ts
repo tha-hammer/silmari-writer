@@ -176,6 +176,12 @@ export async function createVoiceSession(options: VoiceSessionOptions): Promise<
         console.log('[Voice] DC event:', data.type, data);
       }
 
+      // Log transcription events explicitly
+      if (data.type && data.type.includes('transcription')) {
+        // eslint-disable-next-line no-console
+        console.log('[Voice] Transcription event:', data.type, 'transcript:', data.transcript, data);
+      }
+
       // Handle errors from OpenAI
       if (data.type === 'error') {
         console.error('[Voice] OpenAI error:', data.error);
@@ -206,7 +212,7 @@ export async function createVoiceSession(options: VoiceSessionOptions): Promise<
           modalities: ['text', 'audio'],
           voice: 'alloy',
           turn_detection: needsMicrophone ? { type: 'server_vad' } : null,
-          input_audio_transcription: { model: 'whisper-1' },
+          input_audio_transcription: { model: 'gpt-4o-transcribe' },
         },
       };
       if (instructions) {
