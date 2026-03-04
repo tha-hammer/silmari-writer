@@ -326,4 +326,140 @@ describe('SessionDAO — Supabase Wiring', () => {
       });
     });
   });
+
+  // --- findStoryRecordByPrepSessionId ---
+  describe('findStoryRecordByPrepSessionId', () => {
+    describe('Reachability', () => {
+      it('returns prep-linked story record when found', async () => {
+        const row = {
+          id: 'sr-prep-1',
+          session_id: 'sess-1',
+          status: 'RECALL',
+          content: 'legacy',
+          responses: ['legacy'],
+          created_at: '2026-01-01',
+          updated_at: '2026-01-01',
+        };
+        mockMaybeSingle.mockResolvedValue({ data: row, error: null });
+
+        const result = await SessionDAO.findStoryRecordByPrepSessionId('sess-1');
+        expect(result).not.toBeNull();
+        expect(result?.sessionId).toBe('sess-1');
+      });
+    });
+
+    describe('ErrorConsistency', () => {
+      it('throws SessionError on DB error', async () => {
+        mockMaybeSingle.mockResolvedValue({ data: null, error: { message: 'prep find failed' } });
+
+        await expect(SessionDAO.findStoryRecordByPrepSessionId('sess-1')).rejects.toThrow(SessionError);
+      });
+    });
+  });
+
+  // --- upsertPrepStoryRecordWorkingAnswer ---
+  describe('upsertPrepStoryRecordWorkingAnswer', () => {
+    describe('Reachability', () => {
+      it('creates prep-linked story record when one does not exist', async () => {
+        mockMaybeSingle
+          .mockResolvedValueOnce({
+            data: {
+              id: 'sess-1',
+              state: 'initialized',
+              user_id: 'user-1',
+              created_at: '2026-01-01',
+              updated_at: '2026-01-01',
+            },
+            error: null,
+          })
+          .mockResolvedValueOnce({ data: null, error: null });
+
+        mockSingle.mockResolvedValue({
+          data: {
+            id: 'sr-prep-1',
+            session_id: 'sess-1',
+            user_id: 'user-1',
+            status: 'RECALL',
+            content: 'legacy answer',
+            responses: ['legacy answer'],
+            created_at: '2026-01-01',
+            updated_at: '2026-01-01',
+          },
+          error: null,
+        });
+
+        const result = await SessionDAO.upsertPrepStoryRecordWorkingAnswer('sess-1', 'legacy answer');
+
+        expect(result).not.toBeNull();
+        expect(result?.sessionId).toBe('sess-1');
+        expect(result?.content).toBe('legacy answer');
+      });
+
+      it('updates prep-linked story record when one already exists', async () => {
+        mockMaybeSingle
+          .mockResolvedValueOnce({
+            data: {
+              id: 'sess-1',
+              state: 'initialized',
+              user_id: 'user-1',
+              created_at: '2026-01-01',
+              updated_at: '2026-01-01',
+            },
+            error: null,
+          })
+          .mockResolvedValueOnce({
+            data: {
+              id: 'sr-prep-1',
+              session_id: 'sess-1',
+              user_id: 'user-1',
+              status: 'RECALL',
+              content: 'old',
+              responses: ['old'],
+              created_at: '2026-01-01',
+              updated_at: '2026-01-01',
+            },
+            error: null,
+          });
+
+        mockSingle.mockResolvedValue({
+          data: {
+            id: 'sr-prep-1',
+            session_id: 'sess-1',
+            user_id: 'user-1',
+            status: 'RECALL',
+            content: 'new answer',
+            responses: ['old'],
+            created_at: '2026-01-01',
+            updated_at: '2026-01-02',
+          },
+          error: null,
+        });
+
+        const result = await SessionDAO.upsertPrepStoryRecordWorkingAnswer('sess-1', 'new answer');
+
+        expect(result).not.toBeNull();
+        expect(result?.id).toBe('sr-prep-1');
+        expect(result?.content).toBe('new answer');
+      });
+    });
+
+    describe('ErrorConsistency', () => {
+      it('fails explicitly when prep session has no user_id', async () => {
+        mockMaybeSingle.mockResolvedValue({
+          data: {
+            id: 'sess-1',
+            state: 'initialized',
+            user_id: null,
+            created_at: '2026-01-01',
+            updated_at: '2026-01-01',
+          },
+          error: null,
+        });
+
+        await expect(
+          SessionDAO.upsertPrepStoryRecordWorkingAnswer('sess-1', 'legacy answer'),
+        ).rejects.toThrow(SessionError);
+      });
+    });
+  });
 });

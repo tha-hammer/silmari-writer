@@ -42,10 +42,20 @@ vi.mock('@/api_contracts/submitVoiceResponse', () => ({
 }));
 
 vi.mock('@/api_contracts/sessionVoiceTurns', () => ({
-  getSessionVoiceTurns: (sessionId: string) => mockGetSessionVoiceTurns(sessionId),
-  updateSessionWorkingAnswer: (sessionId: string, content: string) => mockUpdateSessionWorkingAnswer(sessionId, content),
-  resetSessionVoiceTurns: (sessionId: string) => mockResetSessionVoiceTurns(sessionId),
-  advanceSessionQuestion: (sessionId: string) => mockAdvanceSessionQuestion(sessionId),
+  getSessionVoiceTurns: (sessionId: string, sessionSource: 'answer_session' | 'session') => (
+    mockGetSessionVoiceTurns(sessionId, sessionSource)
+  ),
+  updateSessionWorkingAnswer: (
+    sessionId: string,
+    content: string,
+    sessionSource: 'answer_session' | 'session',
+  ) => mockUpdateSessionWorkingAnswer(sessionId, content, sessionSource),
+  resetSessionVoiceTurns: (sessionId: string, sessionSource: 'answer_session' | 'session') => (
+    mockResetSessionVoiceTurns(sessionId, sessionSource)
+  ),
+  advanceSessionQuestion: (sessionId: string, sessionSource: 'answer_session' | 'session') => (
+    mockAdvanceSessionQuestion(sessionId, sessionSource)
+  ),
 }));
 
 vi.mock('@/data_loaders/RecallProgressLoader', () => ({
@@ -95,6 +105,7 @@ describe('RecallScreen voice session wiring', () => {
 
     mockGetSessionVoiceTurns.mockResolvedValue({
       sessionId: SESSION_ID,
+      sessionSource: 'answer_session',
       workingAnswer: '',
       turns: [],
       questionProgress: {
@@ -107,6 +118,7 @@ describe('RecallScreen voice session wiring', () => {
 
     mockUpdateSessionWorkingAnswer.mockResolvedValue({
       sessionId: SESSION_ID,
+      sessionSource: 'answer_session',
       workingAnswer: '',
       turns: [],
       questionProgress: {
@@ -119,6 +131,7 @@ describe('RecallScreen voice session wiring', () => {
 
     mockResetSessionVoiceTurns.mockResolvedValue({
       sessionId: SESSION_ID,
+      sessionSource: 'answer_session',
       workingAnswer: '',
       turns: [],
       questionProgress: {
@@ -131,6 +144,7 @@ describe('RecallScreen voice session wiring', () => {
 
     mockAdvanceSessionQuestion.mockResolvedValue({
       sessionId: SESSION_ID,
+      sessionSource: 'answer_session',
       workingAnswer: '',
       turns: [],
       questionProgress: {
@@ -225,7 +239,7 @@ describe('RecallScreen voice session wiring', () => {
     const user = userEvent.setup();
     mockSessionState = 'connected';
 
-    render(<RecallScreen sessionId={SESSION_ID} />);
+    render(<RecallScreen sessionId={SESSION_ID} sessionSource="answer_session" />);
 
     await user.click(screen.getByTestId('record-button'));
 
@@ -235,7 +249,7 @@ describe('RecallScreen voice session wiring', () => {
 
   it('registers and cleans up realtime event handler when connected with sessionId', () => {
     mockSessionState = 'connected';
-    const { unmount } = render(<RecallScreen sessionId={SESSION_ID} />);
+    const { unmount } = render(<RecallScreen sessionId={SESSION_ID} sessionSource="answer_session" />);
 
     expect(mockSetOnEvent).toHaveBeenCalledWith(expect.any(Function));
 
@@ -249,6 +263,7 @@ describe('RecallScreen voice session wiring', () => {
     render(
       <RecallScreen
         sessionId={SESSION_ID}
+        sessionSource="answer_session"
         onVoiceResponseSaved={mockOnVoiceResponseSaved}
       />,
     );
@@ -267,15 +282,57 @@ describe('RecallScreen voice session wiring', () => {
     });
 
     await waitFor(() => {
-      expect(mockUpdateSessionWorkingAnswer).toHaveBeenCalled();
+      expect(mockUpdateSessionWorkingAnswer).toHaveBeenCalledWith(
+        SESSION_ID,
+        expect.stringContaining('Built an onboarding workflow.'),
+        'answer_session',
+      );
       expect(mockOnVoiceResponseSaved).toHaveBeenCalledTimes(1);
       expect(screen.getByTestId('voice-submit-status')).toHaveTextContent('Response saved.');
     });
   });
 
-  it('treats move-on utterances as control intents', async () => {
+  it('does not call submitVoiceResponse when sessionSource is session', async () => {
+    mockSessionState = 'connected';
+    render(<RecallScreen sessionId={SESSION_ID} sessionSource="session" />);
+
+    emitVoiceEvent({
+      type: 'conversation.item.input_audio_transcription.completed',
+      item_id: 'item-legacy-1',
+      transcript: 'Built an onboarding workflow.',
+    });
+
+    await waitFor(() => {
+      expect(mockSubmitVoiceResponse).not.toHaveBeenCalled();
+      expect(mockUpdateSessionWorkingAnswer).toHaveBeenCalledWith(
+        SESSION_ID,
+        expect.stringContaining('Built an onboarding workflow.'),
+        'session',
+      );
+      expect(screen.getByTestId('voice-submit-status')).toHaveTextContent('Response saved.');
+    });
+  });
+
+  it('fails closed when sessionSource is missing', async () => {
     mockSessionState = 'connected';
     render(<RecallScreen sessionId={SESSION_ID} />);
+
+    emitVoiceEvent({
+      type: 'conversation.item.input_audio_transcription.completed',
+      item_id: 'item-missing-source-1',
+      transcript: 'Built an onboarding workflow.',
+    });
+
+    await waitFor(() => {
+      expect(mockSubmitVoiceResponse).not.toHaveBeenCalled();
+      expect(mockUpdateSessionWorkingAnswer).not.toHaveBeenCalled();
+      expect(screen.getByTestId('voice-submit-status')).toHaveTextContent('Could not save response');
+    });
+  });
+
+  it('treats move-on utterances as control intents', async () => {
+    mockSessionState = 'connected';
+    render(<RecallScreen sessionId={SESSION_ID} sessionSource="answer_session" />);
 
     emitVoiceEvent({
       type: 'conversation.item.input_audio_transcription.completed',
@@ -291,7 +348,7 @@ describe('RecallScreen voice session wiring', () => {
 
   it('persists manual working-answer edits on blur', async () => {
     const user = userEvent.setup();
-    render(<RecallScreen sessionId={SESSION_ID} />);
+    render(<RecallScreen sessionId={SESSION_ID} sessionSource="answer_session" />);
 
     const editor = screen.getByTestId('working-answer-editor');
     await user.type(editor, 'Draft answer line.');
@@ -302,6 +359,7 @@ describe('RecallScreen voice session wiring', () => {
       expect(mockUpdateSessionWorkingAnswer).toHaveBeenCalledWith(
         SESSION_ID,
         expect.stringContaining('Draft answer line.'),
+        'answer_session',
       );
     });
   });
@@ -309,6 +367,7 @@ describe('RecallScreen voice session wiring', () => {
   it('loads persisted working answer on mount', async () => {
     mockGetSessionVoiceTurns.mockResolvedValueOnce({
       sessionId: SESSION_ID,
+      sessionSource: 'answer_session',
       workingAnswer: 'Recovered answer from DB',
       turns: ['Recovered answer from DB'],
       questionProgress: {
@@ -319,7 +378,7 @@ describe('RecallScreen voice session wiring', () => {
       },
     });
 
-    render(<RecallScreen sessionId={SESSION_ID} />);
+    render(<RecallScreen sessionId={SESSION_ID} sessionSource="answer_session" />);
 
     await waitFor(() => {
       expect(screen.getByTestId('working-answer-editor')).toHaveValue('Recovered answer from DB');

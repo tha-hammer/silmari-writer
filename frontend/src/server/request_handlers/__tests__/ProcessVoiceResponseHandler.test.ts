@@ -9,6 +9,8 @@ import type {
 vi.mock('../../data_access_objects/SessionDAO', () => ({
   SessionDAO: {
     findAnswerSessionById: vi.fn(),
+    findById: vi.fn(),
+    findPrepSessionUserId: vi.fn(),
   },
 }));
 
@@ -40,6 +42,7 @@ const validPayload = {
   sessionId: '550e8400-e29b-41d4-a716-446655440000',
   transcript: 'I led a cross-functional team that reduced deployment time by 40 percent.',
 };
+const authContext = { userId: 'user-123', authenticated: true };
 
 const baseSession: Omit<AnswerSession, 'state'> = {
   id: '550e8400-e29b-41d4-a716-446655440000',
@@ -84,7 +87,7 @@ describe('ProcessVoiceResponseHandler', () => {
       mockDAO.findAnswerSessionById.mockResolvedValue(makeSession(currentState));
       mockService.progressSession.mockResolvedValue(makeServiceResult(nextState));
 
-      const result = await ProcessVoiceResponseHandler.handle(validPayload);
+      const result = await ProcessVoiceResponseHandler.handle(validPayload, authContext);
 
       expect(mockDAO.findAnswerSessionById).toHaveBeenCalledWith(validPayload.sessionId);
       expect(mockService.progressSession).toHaveBeenCalledWith(
@@ -100,7 +103,7 @@ describe('ProcessVoiceResponseHandler', () => {
     mockDAO.findAnswerSessionById.mockResolvedValue(makeSession('INIT'));
     mockService.progressSession.mockResolvedValue(makeServiceResult('IN_PROGRESS'));
 
-    const result = await ProcessVoiceResponseHandler.handle(validPayload);
+    const result = await ProcessVoiceResponseHandler.handle(validPayload, authContext);
     const parsed = SessionWithStoryRecordSchema.safeParse(result);
 
     expect(parsed.success).toBe(true);
@@ -110,7 +113,7 @@ describe('ProcessVoiceResponseHandler', () => {
     mockDAO.findAnswerSessionById.mockResolvedValue(makeSession('COMPLETE'));
 
     try {
-      await ProcessVoiceResponseHandler.handle(validPayload);
+      await ProcessVoiceResponseHandler.handle(validPayload, authContext);
       expect.fail('Should have thrown');
     } catch (e) {
       expect(e).toBeInstanceOf(SessionError);
@@ -123,7 +126,7 @@ describe('ProcessVoiceResponseHandler', () => {
       await ProcessVoiceResponseHandler.handle({
         sessionId: '',
         transcript: 'Some transcript',
-      });
+      }, authContext);
       expect.fail('Should have thrown');
     } catch (e) {
       expect(e).toBeInstanceOf(SessionError);
@@ -136,7 +139,7 @@ describe('ProcessVoiceResponseHandler', () => {
       await ProcessVoiceResponseHandler.handle({
         sessionId: '550e8400-e29b-41d4-a716-446655440000',
         transcript: '',
-      });
+      }, authContext);
       expect.fail('Should have thrown');
     } catch (e) {
       expect(e).toBeInstanceOf(SessionError);
@@ -146,14 +149,50 @@ describe('ProcessVoiceResponseHandler', () => {
 
   it('throws INVALID_STATE when session is not found', async () => {
     mockDAO.findAnswerSessionById.mockResolvedValue(null);
+    mockDAO.findById.mockResolvedValue(null);
 
     try {
-      await ProcessVoiceResponseHandler.handle(validPayload);
+      await ProcessVoiceResponseHandler.handle(validPayload, authContext);
       expect.fail('Should have thrown');
     } catch (e) {
       expect(e).toBeInstanceOf(SessionError);
-      expect((e as SessionError).code).toBe('INVALID_STATE');
+      expect((e as SessionError).code).toBe('SESSION_NOT_FOUND');
     }
+  });
+
+  it('throws explicit mismatch message when owned id exists only in sessions', async () => {
+    mockDAO.findAnswerSessionById.mockResolvedValue(null);
+    mockDAO.findById.mockResolvedValue({
+      id: validPayload.sessionId,
+      state: 'DRAFT',
+      createdAt: '2026-02-28T00:00:00Z',
+      updatedAt: '2026-02-28T00:00:00Z',
+    });
+    mockDAO.findPrepSessionUserId.mockResolvedValue(authContext.userId);
+
+    await expect(
+      ProcessVoiceResponseHandler.handle(validPayload, authContext),
+    ).rejects.toMatchObject({
+      code: 'INVALID_STATE',
+      message: expect.stringContaining('prep/session workflow'),
+    });
+  });
+
+  it('returns not-found semantics when legacy id exists but caller is not owner', async () => {
+    mockDAO.findAnswerSessionById.mockResolvedValue(null);
+    mockDAO.findById.mockResolvedValue({
+      id: validPayload.sessionId,
+      state: 'DRAFT',
+      createdAt: '2026-02-28T00:00:00Z',
+      updatedAt: '2026-02-28T00:00:00Z',
+    });
+    mockDAO.findPrepSessionUserId.mockResolvedValue('user-other');
+
+    await expect(
+      ProcessVoiceResponseHandler.handle(validPayload, authContext),
+    ).rejects.toMatchObject({
+      code: 'SESSION_NOT_FOUND',
+    });
   });
 
   it('rethrows SessionError from service as-is', async () => {
@@ -164,7 +203,7 @@ describe('ProcessVoiceResponseHandler', () => {
     );
 
     try {
-      await ProcessVoiceResponseHandler.handle(validPayload);
+      await ProcessVoiceResponseHandler.handle(validPayload, authContext);
       expect.fail('Should have thrown');
     } catch (e) {
       expect(e).toBeInstanceOf(SessionError);
@@ -177,7 +216,7 @@ describe('ProcessVoiceResponseHandler', () => {
     mockService.progressSession.mockRejectedValue(new TypeError('unexpected'));
 
     try {
-      await ProcessVoiceResponseHandler.handle(validPayload);
+      await ProcessVoiceResponseHandler.handle(validPayload, authContext);
       expect.fail('Should have thrown');
     } catch {
       expect(mockLogger.error).toHaveBeenCalled();

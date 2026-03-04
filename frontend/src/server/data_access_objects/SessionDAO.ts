@@ -16,7 +16,12 @@
 import type { Session, SessionState } from '@/server/data_structures/Session';
 import type { AnswerSession, AnswerSessionState, AnswerStoryRecord } from '@/server/data_structures/AnswerSession';
 import type { SlotState } from '@/server/data_structures/VoiceInteractionContext';
-import { QuestionProgressStateSchema, type QuestionProgressState } from '@/lib/recallQuestions';
+import {
+  DEFAULT_RECALL_QUESTIONS,
+  initializeQuestionProgress,
+  QuestionProgressStateSchema,
+  type QuestionProgressState,
+} from '@/lib/recallQuestions';
 import { supabase } from '@/lib/supabase';
 import { SessionErrors, SessionError } from '@/server/error_definitions/SessionErrors';
 import { randomUUID } from 'node:crypto';
@@ -58,6 +63,15 @@ const DEFAULT_BOOTSTRAP_STORIES = [
 
 export interface BootstrapQuestionContext {
   questionId: string;
+}
+type SessionSource = 'answer_session' | 'session';
+
+function normalizeResponsesForContent(content: string): string[] {
+  const normalizedContent = content.trim();
+  if (normalizedContent.length === 0) {
+    return [];
+  }
+  return [normalizedContent];
 }
 
 function mapSession(data: Record<string, unknown>): Session {
@@ -121,6 +135,32 @@ export const SessionDAO = {
 
       if (!data) return null;
       return mapSession(data);
+    } catch (err) {
+      if (err instanceof SessionError) throw err;
+      throw SessionErrors.PersistenceFailure(`Unexpected: ${(err as Error).message}`);
+    }
+  },
+
+  async findPrepSessionUserId(id: string): Promise<string | null> {
+    try {
+      const { data, error } = await supabase
+        .from('sessions')
+        .select('user_id')
+        .eq('id', id)
+        .maybeSingle();
+
+      if (error) {
+        throw SessionErrors.PersistenceFailure(`Failed to find prep session owner: ${error.message}`);
+      }
+
+      if (!data) {
+        return null;
+      }
+
+      const prepSessionUserId = typeof data.user_id === 'string'
+        ? data.user_id.trim()
+        : '';
+      return prepSessionUserId.length > 0 ? prepSessionUserId : null;
     } catch (err) {
       if (err instanceof SessionError) throw err;
       throw SessionErrors.PersistenceFailure(`Unexpected: ${(err as Error).message}`);
@@ -385,11 +425,7 @@ export const SessionDAO = {
     }
   },
 
-  /**
-   * Find an AnswerStoryRecord by session ID.
-   * Returns null if not found.
-   */
-  async findStoryRecordBySessionId(sessionId: string): Promise<AnswerStoryRecord | null> {
+  async findStoryRecordByVoiceSessionId(sessionId: string): Promise<AnswerStoryRecord | null> {
     try {
       const { data, error } = await supabase
         .from('story_records')
@@ -402,6 +438,124 @@ export const SessionDAO = {
       }
 
       if (!data) return null;
+      return mapStoryRecord(data);
+    } catch (err) {
+      if (err instanceof SessionError) throw err;
+      throw SessionErrors.PersistenceFailure(`Unexpected: ${(err as Error).message}`);
+    }
+  },
+
+  async findStoryRecordByPrepSessionId(sessionId: string): Promise<AnswerStoryRecord | null> {
+    try {
+      const { data, error } = await supabase
+        .from('story_records')
+        .select('*')
+        .eq('session_id', sessionId)
+        .maybeSingle();
+
+      if (error) {
+        throw SessionErrors.PersistenceFailure(`Failed to find prep story record: ${error.message}`);
+      }
+
+      if (!data) return null;
+      return mapStoryRecord(data);
+    } catch (err) {
+      if (err instanceof SessionError) throw err;
+      throw SessionErrors.PersistenceFailure(`Unexpected: ${(err as Error).message}`);
+    }
+  },
+
+  /**
+   * Backward-compatible alias for voice-session story lookup.
+   */
+  async findStoryRecordBySessionId(sessionId: string): Promise<AnswerStoryRecord | null> {
+    return this.findStoryRecordByVoiceSessionId(sessionId);
+  },
+
+  async upsertPrepStoryRecordWorkingAnswer(
+    prepSessionId: string,
+    content: string,
+  ): Promise<AnswerStoryRecord | null> {
+    try {
+      const { data: prepSession, error: prepSessionError } = await supabase
+        .from('sessions')
+        .select('id, user_id')
+        .eq('id', prepSessionId)
+        .maybeSingle();
+
+      if (prepSessionError) {
+        throw SessionErrors.PersistenceFailure(
+          `Failed to resolve prep session ownership: ${prepSessionError.message}`,
+        );
+      }
+
+      if (!prepSession) {
+        throw SessionErrors.NotFound(`Session ${prepSessionId} not found`);
+      }
+
+      const prepSessionUserId = typeof prepSession.user_id === 'string'
+        ? prepSession.user_id.trim()
+        : '';
+
+      if (!prepSessionUserId) {
+        throw SessionErrors.PersistenceFailure(
+          `Prep session ${prepSessionId} is missing user_id required for durable story record writes`,
+        );
+      }
+
+      const existingStoryRecord = await this.findStoryRecordByPrepSessionId(prepSessionId);
+      if (existingStoryRecord) {
+        const { data, error } = await supabase
+          .from('story_records')
+          .update({
+            content,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', existingStoryRecord.id)
+          .select()
+          .single();
+
+        if (error) {
+          throw SessionErrors.PersistenceFailure(
+            `Failed to update prep story record content: ${error.message}`,
+          );
+        }
+
+        if (!data) {
+          throw SessionErrors.PersistenceFailure(
+            'No data returned from prep story record content update',
+          );
+        }
+
+        return mapStoryRecord(data);
+      }
+
+      const initialQuestionProgress = initializeQuestionProgress(DEFAULT_RECALL_QUESTIONS);
+      const { data, error } = await supabase
+        .from('story_records')
+        .insert({
+          session_id: prepSessionId,
+          user_id: prepSessionUserId,
+          status: 'RECALL',
+          content,
+          responses: normalizeResponsesForContent(content),
+          question_progress: initialQuestionProgress,
+        })
+        .select()
+        .single();
+
+      if (error) {
+        throw SessionErrors.PersistenceFailure(
+          `Failed to create prep story record content: ${error.message}`,
+        );
+      }
+
+      if (!data) {
+        throw SessionErrors.PersistenceFailure(
+          'No data returned from prep story record creation',
+        );
+      }
+
       return mapStoryRecord(data);
     } catch (err) {
       if (err instanceof SessionError) throw err;
@@ -535,9 +689,12 @@ export const SessionDAO = {
   async updateStoryRecordWorkingAnswer(
     sessionId: string,
     content: string,
+    sessionSource: SessionSource = 'answer_session',
   ): Promise<AnswerStoryRecord | null> {
     try {
-      const storyRecord = await this.findStoryRecordBySessionId(sessionId);
+      const storyRecord = sessionSource === 'session'
+        ? await this.findStoryRecordByPrepSessionId(sessionId)
+        : await this.findStoryRecordByVoiceSessionId(sessionId);
       if (!storyRecord) {
         return null;
       }
@@ -570,9 +727,12 @@ export const SessionDAO = {
   async replaceStoryRecordResponses(
     sessionId: string,
     responses: string[],
+    sessionSource: SessionSource = 'answer_session',
   ): Promise<AnswerStoryRecord | null> {
     try {
-      const storyRecord = await this.findStoryRecordBySessionId(sessionId);
+      const storyRecord = sessionSource === 'session'
+        ? await this.findStoryRecordByPrepSessionId(sessionId)
+        : await this.findStoryRecordByVoiceSessionId(sessionId);
       if (!storyRecord) {
         return null;
       }
@@ -605,9 +765,12 @@ export const SessionDAO = {
   async updateStoryRecordQuestionProgress(
     sessionId: string,
     questionProgress: QuestionProgressState,
+    sessionSource: SessionSource = 'answer_session',
   ): Promise<AnswerStoryRecord | null> {
     try {
-      const storyRecord = await this.findStoryRecordBySessionId(sessionId);
+      const storyRecord = sessionSource === 'session'
+        ? await this.findStoryRecordByPrepSessionId(sessionId)
+        : await this.findStoryRecordByVoiceSessionId(sessionId);
       if (!storyRecord) {
         return null;
       }

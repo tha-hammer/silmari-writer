@@ -18,6 +18,7 @@ import { useState, Component } from 'react';
 import type { ErrorInfo, ReactNode } from 'react';
 import ReviewScreen from '@/components/review/ReviewScreen';
 import RecallScreen from '@/components/RecallScreen';
+import type { SessionVoiceTurnsSource } from '@/api_contracts/sessionVoiceTurns';
 import { frontendLogger } from '@/logging/index';
 import type { Story } from '@/server/data_structures/ConfirmStory';
 import type {
@@ -35,6 +36,7 @@ export interface WritingFlowModuleProps {
   initialStep?: WritingFlowStep | string;
   selectedStory?: Story | null;
   sessionId?: string;
+  sessionSource?: SessionVoiceTurnsSource;
   initialWorkingAnswer?: string | null;
   initialResponses?: string[];
   onVoiceResponseSaved?: () => Promise<void> | void;
@@ -123,6 +125,7 @@ export function WritingFlowModule({
   initialStep,
   selectedStory = null,
   sessionId,
+  sessionSource,
   initialWorkingAnswer = null,
   initialResponses = [],
   onVoiceResponseSaved,
@@ -167,6 +170,7 @@ export function WritingFlowModule({
           <RecallScreen
             selectedStory={selectedStory}
             sessionId={sessionId}
+            sessionSource={sessionSource}
             initialWorkingAnswer={initialWorkingAnswer}
             initialResponses={initialResponses}
             onVoiceResponseSaved={onVoiceResponseSaved}

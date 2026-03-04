@@ -3,6 +3,7 @@ import {
   SessionVoiceTurnsResponseSchema,
   advanceSessionQuestion,
   getSessionVoiceTurns,
+  updateSessionWorkingAnswer,
 } from '../sessionVoiceTurns';
 
 const mockFetch = vi.fn();
@@ -17,6 +18,7 @@ describe('sessionVoiceTurns API contract', () => {
     expect(
       SessionVoiceTurnsResponseSchema.safeParse({
         sessionId: '550e8400-e29b-41d4-a716-446655440000',
+        sessionSource: 'answer_session',
         workingAnswer: 'Saved answer',
         turns: ['Turn 1'],
         questionProgress: {
@@ -34,14 +36,19 @@ describe('sessionVoiceTurns API contract', () => {
       ok: true,
       json: async () => ({
         sessionId: '550e8400-e29b-41d4-a716-446655440000',
+        sessionSource: 'session',
         workingAnswer: '',
         turns: [],
       }),
     });
 
-    const response = await getSessionVoiceTurns('550e8400-e29b-41d4-a716-446655440000');
+    const response = await getSessionVoiceTurns('550e8400-e29b-41d4-a716-446655440000', 'session');
     expect(response.questionProgress.total).toBeGreaterThan(0);
     expect(response.questionProgress.currentIndex).toBe(0);
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/session/voice-turns?sessionId=550e8400-e29b-41d4-a716-446655440000&sessionSource=session',
+      undefined,
+    );
   });
 
   it('posts advance_question action for progression', async () => {
@@ -49,6 +56,7 @@ describe('sessionVoiceTurns API contract', () => {
       ok: true,
       json: async () => ({
         sessionId: '550e8400-e29b-41d4-a716-446655440000',
+        sessionSource: 'answer_session',
         workingAnswer: '',
         turns: [],
         questionProgress: {
@@ -60,7 +68,7 @@ describe('sessionVoiceTurns API contract', () => {
       }),
     });
 
-    const response = await advanceSessionQuestion('550e8400-e29b-41d4-a716-446655440000');
+    const response = await advanceSessionQuestion('550e8400-e29b-41d4-a716-446655440000', 'answer_session');
     expect(response.questionProgress.currentIndex).toBe(1);
     expect(mockFetch).toHaveBeenCalledWith(
       '/api/session/voice-turns',
@@ -69,5 +77,16 @@ describe('sessionVoiceTurns API contract', () => {
       }),
     );
     expect(mockFetch.mock.calls[0][1]?.body).toContain('"action":"advance_question"');
+    expect(mockFetch.mock.calls[0][1]?.body).toContain('"sessionSource":"answer_session"');
+  });
+
+  it('validates source for update_working_answer request payload', async () => {
+    await expect(
+      updateSessionWorkingAnswer(
+        '550e8400-e29b-41d4-a716-446655440000',
+        'hello world',
+        'bad-source' as 'session',
+      ),
+    ).rejects.toThrow(/sessionSource|Invalid enum/i);
   });
 });

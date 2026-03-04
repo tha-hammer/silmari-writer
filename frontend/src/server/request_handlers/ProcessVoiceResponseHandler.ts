@@ -19,18 +19,47 @@
  */
 
 import type { SessionWithStoryRecord } from '@/server/data_structures/AnswerSession';
+import type { AnswerSession } from '@/server/data_structures/AnswerSession';
 import { SubmitVoiceResponseRequestSchema } from '@/api_contracts/submitVoiceResponse';
 import { SessionDAO } from '@/server/data_access_objects/SessionDAO';
 import { SessionProgressionService } from '@/server/services/SessionProgressionService';
 import { SessionErrors, SessionError } from '@/server/error_definitions/SessionErrors';
 import { GenericErrors } from '@/server/error_definitions/GenericErrors';
 import { logger } from '@/server/logging/logger';
+import type { AuthContext } from '@/server/filters/AuthAndValidationFilter';
 
 const ACCEPTED_VOICE_RESPONSE_STATES = new Set(['INIT', 'IN_PROGRESS', 'RECALL']);
 
 export interface ProcessVoiceResponseInput {
   sessionId: string;
   transcript: string;
+}
+
+async function resolveAuthorizedVoiceSession(
+  sessionId: string,
+  authContext: AuthContext,
+): Promise<AnswerSession> {
+  const answerSession = await SessionDAO.findAnswerSessionById(sessionId);
+  if (answerSession) {
+    if (answerSession.userId !== authContext.userId) {
+      throw SessionErrors.NotFound(`Session ${sessionId} not found`);
+    }
+    return answerSession;
+  }
+
+  const legacySession = await SessionDAO.findById(sessionId);
+  if (!legacySession) {
+    throw SessionErrors.NotFound(`Session ${sessionId} not found`);
+  }
+
+  const legacyOwnerId = await SessionDAO.findPrepSessionUserId(sessionId);
+  if (legacyOwnerId !== authContext.userId) {
+    throw SessionErrors.NotFound(`Session ${sessionId} not found`);
+  }
+
+  throw SessionErrors.InvalidState(
+    `Session ${sessionId} belongs to prep/session workflow and cannot be processed by voice-response; use /api/session/voice-turns for Recall persistence.`,
+  );
 }
 
 export const ProcessVoiceResponseHandler = {
@@ -43,7 +72,10 @@ export const ProcessVoiceResponseHandler = {
    * @param payload - Raw input with sessionId and transcript
    * @returns SessionWithStoryRecord with updated entities
    */
-  async handle(payload: ProcessVoiceResponseInput): Promise<SessionWithStoryRecord> {
+  async handle(
+    payload: ProcessVoiceResponseInput,
+    authContext?: AuthContext,
+  ): Promise<SessionWithStoryRecord> {
     try {
       // Step 1: Validate payload
       const validation = SubmitVoiceResponseRequestSchema.safeParse(payload);
@@ -56,8 +88,10 @@ export const ProcessVoiceResponseHandler = {
 
       const { sessionId, transcript } = validation.data;
 
-      // Step 2: Fetch session
-      const session = await SessionDAO.findAnswerSessionById(sessionId);
+      // Step 2: Resolve session identity, enforcing ownership when auth context is provided.
+      const session = authContext?.authenticated && authContext.userId
+        ? await resolveAuthorizedVoiceSession(sessionId, authContext)
+        : await SessionDAO.findAnswerSessionById(sessionId);
       if (!session) {
         throw SessionErrors.InvalidState(`Session ${sessionId} not found`);
       }

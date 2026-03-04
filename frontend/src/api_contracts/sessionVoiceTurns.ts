@@ -6,8 +6,12 @@ import {
   type QuestionProgressState,
 } from '@/lib/recallQuestions';
 
+export const SessionVoiceTurnsSourceSchema = z.enum(['answer_session', 'session']);
+export type SessionVoiceTurnsSource = z.infer<typeof SessionVoiceTurnsSourceSchema>;
+
 export const SessionVoiceTurnsResponseSchema = z.object({
   sessionId: z.string().uuid(),
+  sessionSource: SessionVoiceTurnsSourceSchema,
   workingAnswer: z.string(),
   turns: z.array(z.string()),
   questionProgress: QuestionProgressStateSchema.optional(),
@@ -17,6 +21,7 @@ type SessionVoiceTurnsResponseRaw = z.infer<typeof SessionVoiceTurnsResponseSche
 
 export interface SessionVoiceTurnsResponse {
   sessionId: string;
+  sessionSource: SessionVoiceTurnsSource;
   workingAnswer: string;
   turns: string[];
   questionProgress: QuestionProgressState;
@@ -24,17 +29,20 @@ export interface SessionVoiceTurnsResponse {
 
 const UpdateWorkingAnswerRequestSchema = z.object({
   sessionId: z.string().uuid(),
+  sessionSource: SessionVoiceTurnsSourceSchema,
   action: z.literal('update_working_answer'),
   content: z.string(),
 });
 
 const ResetTurnsRequestSchema = z.object({
   sessionId: z.string().uuid(),
+  sessionSource: SessionVoiceTurnsSourceSchema,
   action: z.literal('reset_turns'),
 });
 
 const AdvanceQuestionRequestSchema = z.object({
   sessionId: z.string().uuid(),
+  sessionSource: SessionVoiceTurnsSourceSchema,
   action: z.literal('advance_question'),
 });
 
@@ -46,6 +54,7 @@ const SessionVoiceTurnsRequestSchema = z.discriminatedUnion('action', [
 
 interface VoiceTurnsRequest {
   sessionId: string;
+  sessionSource: SessionVoiceTurnsSource;
   action: 'update_working_answer' | 'reset_turns' | 'advance_question';
   content?: string;
 }
@@ -56,6 +65,7 @@ function withDefaultQuestionProgress(
   const fallbackQuestionProgress = initializeQuestionProgress(DEFAULT_RECALL_QUESTIONS);
   return {
     sessionId: response.sessionId,
+    sessionSource: response.sessionSource,
     workingAnswer: response.workingAnswer,
     turns: response.turns,
     questionProgress: response.questionProgress ?? fallbackQuestionProgress,
@@ -85,16 +95,23 @@ async function fetchVoiceTurns(
   return withDefaultQuestionProgress(parsed.data);
 }
 
-export async function getSessionVoiceTurns(sessionId: string): Promise<SessionVoiceTurnsResponse> {
-  return fetchVoiceTurns(`/api/session/voice-turns?sessionId=${encodeURIComponent(sessionId)}`);
+export async function getSessionVoiceTurns(
+  sessionId: string,
+  sessionSource: SessionVoiceTurnsSource,
+): Promise<SessionVoiceTurnsResponse> {
+  return fetchVoiceTurns(
+    `/api/session/voice-turns?sessionId=${encodeURIComponent(sessionId)}&sessionSource=${sessionSource}`,
+  );
 }
 
 export async function updateSessionWorkingAnswer(
   sessionId: string,
   content: string,
+  sessionSource: SessionVoiceTurnsSource,
 ): Promise<SessionVoiceTurnsResponse> {
   const payload: VoiceTurnsRequest = {
     sessionId,
+    sessionSource,
     action: 'update_working_answer',
     content,
   };
@@ -113,9 +130,13 @@ export async function updateSessionWorkingAnswer(
   });
 }
 
-export async function resetSessionVoiceTurns(sessionId: string): Promise<SessionVoiceTurnsResponse> {
+export async function resetSessionVoiceTurns(
+  sessionId: string,
+  sessionSource: SessionVoiceTurnsSource,
+): Promise<SessionVoiceTurnsResponse> {
   const payload: VoiceTurnsRequest = {
     sessionId,
+    sessionSource,
     action: 'reset_turns',
   };
 
@@ -133,9 +154,13 @@ export async function resetSessionVoiceTurns(sessionId: string): Promise<Session
   });
 }
 
-export async function advanceSessionQuestion(sessionId: string): Promise<SessionVoiceTurnsResponse> {
+export async function advanceSessionQuestion(
+  sessionId: string,
+  sessionSource: SessionVoiceTurnsSource,
+): Promise<SessionVoiceTurnsResponse> {
   const payload: VoiceTurnsRequest = {
     sessionId,
+    sessionSource,
     action: 'advance_question',
   };
 

@@ -45,6 +45,7 @@ vi.mock('@/modules/WritingFlowModule', () => ({
     initialStep?: string;
     selectedStory?: unknown;
     sessionId?: string;
+    sessionSource?: 'answer_session' | 'session';
     onVoiceResponseSaved?: () => Promise<void> | void;
   }) => {
     mockWritingFlowModule(props);
@@ -89,11 +90,11 @@ vi.mock('@/modules/finalizedAnswer/FinalizedAnswerModule', () => ({
   default: () => <div data-testid="finalized-answer-module" />,
 }));
 
-function makeSession(state: string): SessionView {
+function makeSession(state: string, source: SessionView['source'] = 'answer_session'): SessionView {
   return {
     id: '550e8400-e29b-41d4-a716-446655440000',
     state,
-    source: 'answer_session',
+    source,
     questionId: null,
     createdAt: '2026-03-02T10:00:00.000Z',
     updatedAt: '2026-03-02T10:00:00.000Z',
@@ -152,6 +153,19 @@ describe('SessionWorkflowShell', () => {
       expect.objectContaining({
         initialStep: 'RECALL',
         sessionId: '550e8400-e29b-41d4-a716-446655440000',
+        sessionSource: 'answer_session',
+      }),
+    );
+  });
+
+  it('does not render primary entry workflow for legacy initialized source', () => {
+    render(<SessionWorkflowShell session={makeSession('initialized', 'session')} />);
+
+    expect(screen.queryByTestId('primary-entry-workflow')).not.toBeInTheDocument();
+    expect(screen.getByTestId('writing-flow-module')).toBeInTheDocument();
+    expect(mockWritingFlowModule.mock.calls.at(-1)?.[0]).toEqual(
+      expect.objectContaining({
+        sessionSource: 'session',
       }),
     );
   });

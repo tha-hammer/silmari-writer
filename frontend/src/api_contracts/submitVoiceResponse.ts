@@ -37,6 +37,21 @@ export type SubmitVoiceResponseResponse = z.infer<typeof SubmitVoiceResponseResp
 // API Function
 // ---------------------------------------------------------------------------
 
+function resolveClientAuthToken(): string | null {
+  try {
+    const maybeStorage = (globalThis as { localStorage?: { getItem?: (...args: [string]) => string | null } })
+      .localStorage;
+    const persistedToken = maybeStorage?.getItem?.('authToken')?.trim();
+    if (persistedToken && persistedToken.length > 0) {
+      return persistedToken;
+    }
+  } catch {
+    // Ignore storage access issues and fall back to development token.
+  }
+
+  return 'dev-session-token';
+}
+
 /**
  * Typed function that submits a voice response for processing.
  * Validates response via Zod schema.
@@ -44,9 +59,15 @@ export type SubmitVoiceResponseResponse = z.infer<typeof SubmitVoiceResponseResp
 export async function submitVoiceResponse(
   payload: SubmitVoiceResponseRequest,
 ): Promise<SubmitVoiceResponseResponse> {
+  const authToken = resolveClientAuthToken();
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (authToken) {
+    headers.Authorization = `Bearer ${authToken}`;
+  }
+
   const response = await fetch('/api/session/voice-response', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify(payload),
   });
 

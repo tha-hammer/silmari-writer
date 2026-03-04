@@ -50,6 +50,10 @@ describe('submitVoiceResponse API contract', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubGlobal('localStorage', {
+      getItem: vi.fn(() => null),
+      removeItem: vi.fn(),
+    });
   });
 
   // -------------------------------------------------------------------------
@@ -67,7 +71,7 @@ describe('submitVoiceResponse API contract', () => {
 
       expect(mockFetch).toHaveBeenCalledWith('/api/session/voice-response', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: expect.objectContaining({ 'Content-Type': 'application/json' }),
         body: JSON.stringify(validPayload),
       });
     });
@@ -137,6 +141,28 @@ describe('submitVoiceResponse API contract', () => {
   // -------------------------------------------------------------------------
 
   describe('ErrorConsistency: HTTP errors mapped correctly', () => {
+    it('sends Authorization token from client auth context', async () => {
+      vi.stubGlobal('localStorage', {
+        getItem: vi.fn((key: string) => (key === 'authToken' ? 'valid-token' : null)),
+        removeItem: vi.fn(),
+      });
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve(validResponse),
+      });
+
+      await submitVoiceResponse(validPayload);
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/session/voice-response',
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            Authorization: 'Bearer valid-token',
+          }),
+        }),
+      );
+    });
+
     it('should throw with "Authentication required" on 401', async () => {
       mockFetch.mockResolvedValue({
         ok: false,

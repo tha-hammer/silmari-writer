@@ -23,6 +23,7 @@ import {
   advanceSessionQuestion,
   getSessionVoiceTurns,
   resetSessionVoiceTurns,
+  type SessionVoiceTurnsSource,
   updateSessionWorkingAnswer,
 } from '@/api_contracts/sessionVoiceTurns';
 import { emitNewPathClientEvent } from '@/lib/newPathTelemetryClient';
@@ -46,6 +47,7 @@ export interface RecallScreenProps {
   progress?: RecallProgress;
   selectedStory?: Story | null;
   sessionId?: string;
+  sessionSource?: SessionVoiceTurnsSource;
   initialWorkingAnswer?: string | null;
   initialResponses?: string[];
   questions?: RecallQuestion[];
@@ -141,6 +143,7 @@ export default function RecallScreen({
   progress = NEUTRAL_PROGRESS,
   selectedStory = null,
   sessionId,
+  sessionSource,
   initialWorkingAnswer = null,
   initialResponses = [],
   questions,
@@ -217,7 +220,7 @@ export default function RecallScreen({
   }, [sessionId]);
 
   useEffect(() => {
-    if (!sessionId) {
+    if (!sessionId || !sessionSource) {
       return;
     }
 
@@ -225,7 +228,7 @@ export default function RecallScreen({
 
     void (async () => {
       try {
-        const persistedConversation = await getSessionVoiceTurns(sessionId);
+        const persistedConversation = await getSessionVoiceTurns(sessionId, sessionSource);
         if (cancelled) {
           return;
         }
@@ -256,7 +259,7 @@ export default function RecallScreen({
     return () => {
       cancelled = true;
     };
-  }, [refreshProgress, sessionId]);
+  }, [refreshProgress, sessionId, sessionSource]);
 
   useEffect(() => {
     if (!sessionId || greetingEmittedRef.current) {
@@ -284,9 +287,9 @@ export default function RecallScreen({
     setQuestionProgress(locallyAdvanced);
     setStopControlsVisible(false);
 
-    if (sessionId) {
+    if (sessionId && sessionSource) {
       try {
-        const advanced = await advanceSessionQuestion(sessionId);
+        const advanced = await advanceSessionQuestion(sessionId, sessionSource);
         resolvedProgress = advanced.questionProgress;
         setQuestionProgress(advanced.questionProgress);
         if (advanced.workingAnswer.trim().length > 0) {
@@ -305,7 +308,7 @@ export default function RecallScreen({
     }
 
     setCoachPrompt(buildOpeningCoachPrompt(selectedStory, nextQuestion.text));
-  }, [onAdvanceToReview, questionProgress, questionSet, selectedStory, sessionId]);
+  }, [onAdvanceToReview, questionProgress, questionSet, selectedStory, sessionId, sessionSource]);
 
   const presentStopState = useCallback(
     (reason: 'manual_stop' | 'move_on_intent') => {
@@ -365,11 +368,15 @@ export default function RecallScreen({
     if (!sessionId) {
       return;
     }
+    if (!sessionSource) {
+      setEditorStatus('error');
+      return;
+    }
 
     setEditorStatus('saving');
 
     try {
-      await updateSessionWorkingAnswer(sessionId, workingAnswerRef.current);
+      await updateSessionWorkingAnswer(sessionId, workingAnswerRef.current, sessionSource);
       setEditorStatus('saved');
 
       void emitNewPathClientEvent('recall_working_answer_saved', {
@@ -381,16 +388,16 @@ export default function RecallScreen({
     } catch {
       setEditorStatus('error');
     }
-  }, [sessionId]);
+  }, [sessionId, sessionSource]);
 
   const handleStartOver = useCallback(async () => {
     if (isConnected) {
       disconnect();
     }
 
-    if (sessionId) {
+    if (sessionId && sessionSource) {
       try {
-        await resetSessionVoiceTurns(sessionId);
+        await resetSessionVoiceTurns(sessionId, sessionSource);
       } catch {
         // Non-blocking reset fallback still clears local state.
       }
@@ -409,7 +416,31 @@ export default function RecallScreen({
         getQuestionByProgress(questionSet, resetProgress)?.text ?? null,
       ),
     );
-  }, [disconnect, isConnected, questionSet, selectedStory, sessionId]);
+  }, [disconnect, isConnected, questionSet, selectedStory, sessionId, sessionSource]);
+
+  const persistTranscriptBySource = useCallback(async (
+    currentSessionId: string,
+    source: SessionVoiceTurnsSource | undefined,
+    transcript: string,
+    mergedAnswer: string,
+  ) => {
+    if (source === 'session') {
+      await updateSessionWorkingAnswer(currentSessionId, mergedAnswer, 'session');
+      return;
+    }
+
+    if (source === 'answer_session') {
+      await submitVoiceResponse({
+        sessionId: currentSessionId,
+        transcript,
+      });
+
+      await updateSessionWorkingAnswer(currentSessionId, mergedAnswer, 'answer_session').catch(() => undefined);
+      return;
+    }
+
+    throw new Error('Missing sessionSource for transcript persistence');
+  }, []);
 
   useEffect(() => {
     if (sessionState === 'connected') {
@@ -466,12 +497,12 @@ export default function RecallScreen({
 
       void (async () => {
         try {
-          await submitVoiceResponse({
+          await persistTranscriptBySource(
             sessionId,
-            transcript: finalTranscriptEvent.transcript,
-          });
-
-          await updateSessionWorkingAnswer(sessionId, mergedAnswer).catch(() => undefined);
+            sessionSource,
+            finalTranscriptEvent.transcript,
+            mergedAnswer,
+          );
 
           void emitNewPathClientEvent('recall_turn_persisted', {
             session_id: sessionId,
@@ -494,7 +525,17 @@ export default function RecallScreen({
     return () => {
       setOnEvent(null);
     };
-  }, [incompleteSlots.length, isConnected, onVoiceResponseSaved, presentStopState, refreshProgress, sessionId, setOnEvent]);
+  }, [
+    incompleteSlots.length,
+    isConnected,
+    onVoiceResponseSaved,
+    persistTranscriptBySource,
+    presentStopState,
+    refreshProgress,
+    sessionId,
+    sessionSource,
+    setOnEvent,
+  ]);
 
   const submitStatusMessage = useMemo(() => {
     if (submitStatus === 'submitting') return 'Saving your response...';

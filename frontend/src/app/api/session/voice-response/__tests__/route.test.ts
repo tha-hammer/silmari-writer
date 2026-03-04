@@ -13,6 +13,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { SubmitVoiceResponseResponseSchema } from '@/api_contracts/submitVoiceResponse';
+import { deriveUserIdForToken } from '@/test_helpers/authTestUtils';
 
 // Mock the handler
 vi.mock('@/server/request_handlers/ProcessVoiceResponseHandler', () => ({
@@ -27,10 +28,13 @@ import { POST } from '../route';
 const mockHandler = vi.mocked(ProcessVoiceResponseHandler);
 
 // Helper to create a Next.js Request object
-function createRequest(body: unknown): Request {
+function createRequest(body: unknown, authToken?: string): Request {
   return new Request('http://localhost:3000/api/session/voice-response', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+    },
     body: JSON.stringify(body),
   });
 }
@@ -63,6 +67,16 @@ describe('POST /api/session/voice-response', () => {
     vi.clearAllMocks();
   });
 
+  it('returns 401 when Authorization header is missing', async () => {
+    const request = createRequest(validPayload);
+    const response = await POST(request as any);
+    const body = await response.json();
+
+    expect(response.status).toBe(401);
+    expect(body.code).toBe('UNAUTHORIZED');
+    expect(mockHandler.handle).not.toHaveBeenCalled();
+  });
+
   // -------------------------------------------------------------------------
   // Reachability
   // -------------------------------------------------------------------------
@@ -71,7 +85,7 @@ describe('POST /api/session/voice-response', () => {
     it('should return 200 with updated session and story record', async () => {
       mockHandler.handle.mockResolvedValue(handlerResult);
 
-      const request = createRequest(validPayload);
+      const request = createRequest(validPayload, 'valid-token');
       const response = await POST(request as any);
       const body = await response.json();
 
@@ -84,10 +98,13 @@ describe('POST /api/session/voice-response', () => {
     it('should pass payload to handler', async () => {
       mockHandler.handle.mockResolvedValue(handlerResult);
 
-      const request = createRequest(validPayload);
+      const request = createRequest(validPayload, 'valid-token');
       await POST(request as any);
 
-      expect(mockHandler.handle).toHaveBeenCalledWith(validPayload);
+      expect(mockHandler.handle).toHaveBeenCalledWith(validPayload, {
+        userId: deriveUserIdForToken('valid-token'),
+        authenticated: true,
+      });
     });
   });
 
@@ -99,7 +116,7 @@ describe('POST /api/session/voice-response', () => {
     it('should return body matching SubmitVoiceResponseResponseSchema', async () => {
       mockHandler.handle.mockResolvedValue(handlerResult);
 
-      const request = createRequest(validPayload);
+      const request = createRequest(validPayload, 'valid-token');
       const response = await POST(request as any);
       const body = await response.json();
 
@@ -119,7 +136,7 @@ describe('POST /api/session/voice-response', () => {
         SessionErrors.InvalidState('Session not in INIT state'),
       );
 
-      const request = createRequest(validPayload);
+      const request = createRequest(validPayload, 'valid-token');
       const response = await POST(request as any);
       const body = await response.json();
 
@@ -134,7 +151,7 @@ describe('POST /api/session/voice-response', () => {
         SessionErrors.InvalidPayload('Missing transcript'),
       );
 
-      const request = createRequest(validPayload);
+      const request = createRequest(validPayload, 'valid-token');
       const response = await POST(request as any);
       const body = await response.json();
 
@@ -148,7 +165,7 @@ describe('POST /api/session/voice-response', () => {
         GenericErrors.InternalError('Unexpected error'),
       );
 
-      const request = createRequest(validPayload);
+      const request = createRequest(validPayload, 'valid-token');
       const response = await POST(request as any);
       const body = await response.json();
 
@@ -159,7 +176,7 @@ describe('POST /api/session/voice-response', () => {
     it('should return 500 for completely unexpected errors', async () => {
       mockHandler.handle.mockRejectedValue(new TypeError('cannot read property'));
 
-      const request = createRequest(validPayload);
+      const request = createRequest(validPayload, 'valid-token');
       const response = await POST(request as any);
       const body = await response.json();
 
