@@ -11,9 +11,6 @@ const MAX_RETRIES = 3;
 const BASE_RETRY_DELAY_MS = 2000;
 const RATE_LIMIT_BASE_DELAY_MS = 10000;
 const OPENAI_REQUEST_TIMEOUT_MS = 45_000;
-const MAX_DOCUMENT_EXTRACTION_BYTES = 128 * 1024;
-const MAX_DOCUMENT_TEXT_CHARS = 12_000;
-const MIN_DOCUMENT_TEXT_CHARS = 40;
 const MODEL_NAME = 'gpt-4o-mini';
 
 const SYSTEM_PROMPT = `You are a writing partner who writes for real-world outcomes, not academic exercises.
@@ -52,11 +49,13 @@ interface FileAttachment {
   textContent?: string;
   base64Data?: string;
   rawBlob?: string;
+  fileUrl?: string;
 }
 
 type ResponseInputPart =
   | { type: 'input_text'; text: string }
-  | { type: 'input_image'; image_url: string };
+  | { type: 'input_image'; image_url: string }
+  | { type: 'input_file'; filename?: string; file_data?: string; file_url?: string };
 
 type ResponseInputMessage = {
   role: 'system' | 'user' | 'assistant';
@@ -104,12 +103,22 @@ function toAttachment(value: unknown): FileAttachment | null {
     return null;
   }
 
+  const fileUrl =
+    typeof maybe.fileUrl === 'string'
+      ? maybe.fileUrl
+      : typeof maybe.file_url === 'string'
+        ? maybe.file_url
+        : typeof maybe.url === 'string'
+          ? maybe.url
+          : undefined;
+
   return {
     filename: maybe.filename,
     contentType: maybe.contentType,
     textContent: typeof maybe.textContent === 'string' ? maybe.textContent : undefined,
     base64Data: typeof maybe.base64Data === 'string' ? maybe.base64Data : undefined,
     rawBlob: typeof maybe.rawBlob === 'string' ? maybe.rawBlob : undefined,
+    fileUrl,
   };
 }
 
@@ -137,29 +146,24 @@ function calculatePayloadSize(attachments: FileAttachment[]): number {
   }, 0);
 }
 
-async function extractDocumentText(attachment: FileAttachment): Promise<string | null> {
-  if (!attachment.rawBlob) return null;
-
-  try {
-    const buffer = Buffer.from(attachment.rawBlob, 'base64');
-    const sampledBuffer = buffer.subarray(0, MAX_DOCUMENT_EXTRACTION_BYTES);
-    const decoded = sampledBuffer.toString('utf-8');
-
-    // Keep only broadly printable characters to avoid injecting binary noise.
-    const cleaned = decoded
-      .replace(/[^\x09\x0A\x0D\x20-\x7E\u00A0-\uFFFF]/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-
-    if (cleaned.length < MIN_DOCUMENT_TEXT_CHARS) {
-      return null;
-    }
-
-    return cleaned.slice(0, MAX_DOCUMENT_TEXT_CHARS);
-  } catch {
-    console.error(`Failed to extract text from ${attachment.filename}`);
-    return null;
+function toInputFilePart(attachment: FileAttachment): ResponseInputPart | null {
+  if (attachment.fileUrl) {
+    return {
+      type: 'input_file',
+      filename: attachment.filename,
+      file_url: attachment.fileUrl,
+    };
   }
+
+  if (attachment.rawBlob) {
+    return {
+      type: 'input_file',
+      filename: attachment.filename,
+      file_data: attachment.rawBlob,
+    };
+  }
+
+  return null;
 }
 
 function buildUserContent(
@@ -184,11 +188,29 @@ function buildUserContent(
     textContent = `${textContext}\n\n${message}`;
   }
 
-  if (imageAttachments.length === 0) {
+  const documentParts: ResponseInputPart[] = [];
+  const documentFallbackLines: string[] = [];
+
+  for (const attachment of documentAttachments) {
+    const filePart = toInputFilePart(attachment);
+    if (filePart) {
+      documentParts.push(filePart);
+    } else {
+      documentFallbackLines.push(
+        `[Attached file metadata only: ${attachment.filename} (${attachment.contentType})]`,
+      );
+    }
+  }
+
+  if (documentFallbackLines.length > 0) {
+    textContent = `${textContent}\n\n${documentFallbackLines.join('\n')}`;
+  }
+
+  if (imageAttachments.length === 0 && documentParts.length === 0) {
     return textContent;
   }
 
-  const parts: ResponseInputPart[] = [{ type: 'input_text', text: textContent }];
+  const parts: ResponseInputPart[] = [{ type: 'input_text', text: textContent }, ...documentParts];
   for (const attachment of imageAttachments) {
     if (attachment.base64Data) {
       parts.push({ type: 'input_image', image_url: attachment.base64Data });
@@ -235,19 +257,6 @@ export async function POST(request: NextRequest) {
         { error: 'Chat service not configured', code: 'CONFIG_ERROR' },
         { status: 500 },
       );
-    }
-
-    // Extract text from document attachments. Never forward raw binary bytes into the prompt.
-    for (const attachment of attachments) {
-      if (SUPPORTED_DOCUMENT_TYPES.has(attachment.contentType) && attachment.rawBlob) {
-        const extracted = await extractDocumentText(attachment);
-        if (extracted) {
-          attachment.textContent = extracted;
-        } else {
-          attachment.textContent = `[Attached document: ${attachment.filename} (${attachment.contentType}). No extractable plaintext was found in this runtime.]`;
-        }
-        delete attachment.rawBlob;
-      }
     }
 
     const parsedHistory = parseHistory(history);

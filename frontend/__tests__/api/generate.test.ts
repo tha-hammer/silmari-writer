@@ -82,7 +82,7 @@ describe('/api/generate', () => {
     expect(userMessage.content).toBe('Just this text')
   })
 
-  it('extracts text from PDF attachment and includes in user message', async () => {
+  it('forwards PDF attachment as input_file content part', async () => {
     await POST(
       makeRequest({
         message: 'Summarize this',
@@ -100,9 +100,17 @@ describe('/api/generate', () => {
     const body = JSON.parse(options.body as string)
     const userMessage = body.input[body.input.length - 1]
 
-    expect(typeof userMessage.content).toBe('string')
-    expect(userMessage.content).toContain('report.pdf')
-    expect(userMessage.content).toContain('Summarize this')
+    expect(Array.isArray(userMessage.content)).toBe(true)
+    expect(userMessage.content).toContainEqual(
+      expect.objectContaining({
+        type: 'input_file',
+        filename: 'report.pdf',
+        file_data: 'JVBERi0xLjQ=',
+      }),
+    )
+
+    const textPart = userMessage.content.find((part: { type: string }) => part.type === 'input_text')
+    expect(textPart.text).toContain('Summarize this')
   })
 
   it('includes CSV attachment content in user message as text prefix', async () => {
@@ -145,8 +153,15 @@ describe('/api/generate', () => {
 
     const textPart = userMessage.content.find((p: { type: string }) => p.type === 'input_text')
     expect(textPart.text).toContain('Meeting notes')
-    expect(textPart.text).toContain('report.pdf')
     expect(textPart.text).toContain('Review all')
+
+    expect(userMessage.content).toContainEqual(
+      expect.objectContaining({
+        type: 'input_file',
+        filename: 'report.pdf',
+        file_data: 'JVBERi0=',
+      }),
+    )
 
     expect(userMessage.content).toContainEqual(
       expect.objectContaining({ type: 'input_image' }),
