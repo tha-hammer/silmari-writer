@@ -206,22 +206,26 @@ export async function createVoiceSession(options: VoiceSessionOptions): Promise<
       // eslint-disable-next-line no-console
       console.log('[Voice] Data channel opened');
       // Send session configuration via data channel
-      const sessionUpdate: Record<string, unknown> = {
-        type: 'session.update',
-        session: {
-          type: 'realtime',
-          modalities: ['text', 'audio'],
-          voice: 'alloy',
-          turn_detection: needsMicrophone ? { type: 'server_vad' } : null,
-          input_audio_transcription: { model: 'gpt-4o-transcribe' },
+      const session: Record<string, unknown> = {
+        type: 'realtime',
+        output_modalities: ['audio'],
+        audio: {
+          input: {
+            turn_detection: needsMicrophone ? { type: 'server_vad' } : null,
+            transcription: { model: 'gpt-4o-transcribe' },
+          },
+          output: {
+            voice: 'alloy',
+          },
         },
       };
       if (instructions) {
-        sessionUpdate.session = { ...(sessionUpdate.session as object), instructions };
+        session.instructions = instructions;
       }
       if (tools && tools.length > 0) {
-        sessionUpdate.session = { ...(sessionUpdate.session as object), tools };
+        session.tools = tools;
       }
+      const sessionUpdate = { type: 'session.update', session };
       // eslint-disable-next-line no-console
       console.log('[Voice] Sending session.update:', sessionUpdate);
       dc.send(JSON.stringify(sessionUpdate));
