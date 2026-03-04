@@ -209,7 +209,7 @@ export async function createVoiceSession(options: VoiceSessionOptions): Promise<
       const sessionUpdate: Record<string, unknown> = {
         type: 'session.update',
         session: {
-          type: 'conversation',
+          type: 'realtime',
           modalities: ['text', 'audio'],
           voice: 'alloy',
           turn_detection: needsMicrophone ? { type: 'server_vad' } : null,
