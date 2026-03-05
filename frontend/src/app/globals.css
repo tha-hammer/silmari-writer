@@ -172,6 +172,65 @@ body {
   box-shadow: 0 2px 0 0 var(--destructive-border);
 }
 
+/* intro.js theme overrides */
+.introjs-tooltip {
+  border-radius: var(--radius);
+  font-family: var(--font-sans);
+  border: 2px solid var(--border);
+  background-color: var(--card);
+  color: var(--card-foreground);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.12);
+}
+
+.introjs-tooltiptext {
+  color: var(--foreground);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.introjs-button {
+  border-radius: calc(var(--radius) - 2px);
+  font-size: 0.85rem;
+  font-family: var(--font-sans);
+  font-weight: var(--font-weight-bold);
+  text-shadow: none;
+  border: 2px solid var(--border);
+  background-color: var(--secondary);
+  color: var(--secondary-foreground);
+}
+
+.introjs-button:hover {
+  background-color: var(--accent);
+}
+
+.introjs-button:focus {
+  box-shadow: 0 0 0 2px var(--ring);
+}
+
+.introjs-skipbutton {
+  color: var(--muted-foreground);
+}
+
+.introjs-helperLayer {
+  border-radius: var(--radius);
+}
+
+.introjs-donebutton {
+  background-color: var(--primary);
+  color: var(--primary-foreground);
+  border-color: var(--primary-border);
+  box-shadow: 0 2px 0 0 var(--primary-border);
+}
+
+.introjs-donebutton:hover {
+  background-color: var(--primary);
+  opacity: 0.9;
+}
+
+.introjs-overlay {
+  background-color: rgba(0, 0, 0, 0.5);
+}
+
 .texture {
   background-image: url("/texture.jpg");
   background-repeat: repeat;

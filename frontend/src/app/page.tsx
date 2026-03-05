@@ -202,23 +202,19 @@ export default function HomePage() {
   };
 
   return (
-    <AppLayout>
-      <div className="flex flex-1 min-h-0 overflow-hidden bg-background">
-        {/* Sidebar */}
-        <div className="hidden w-64 border-r border-border bg-card/80 lg:block">
-          <div className="p-4">
-            <h2 className="text-lg font-semibold mb-4">Projects</h2>
-          </div>
-          <ProjectSidebar
-            projects={projects}
-            activeProjectId={activeProjectId}
-            onSelectProject={setActiveProject}
-            onNewProject={handleNewProject}
-          />
-        </div>
-
+    <AppLayout
+      sidebar={(
+        <ProjectSidebar
+          projects={projects}
+          activeProjectId={activeProjectId}
+          onSelectProject={setActiveProject}
+          onNewProject={handleNewProject}
+        />
+      )}
+    >
+      <div className="flex flex-1 min-h-0 flex-col overflow-hidden bg-background">
         {/* Main content area */}
-        <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+        <div className="flex flex-1 min-h-0 flex-col overflow-hidden">
           {activeProjectId ? (
             <>
               <div className="flex items-center justify-between border-b bg-background/90 px-4 py-3 backdrop-blur">

@@ -25,6 +25,16 @@ describe('AppLayout', () => {
     expect(screen.getByTestId('test-content')).toBeInTheDocument()
   })
 
+  it('renders provided sidebar content', () => {
+    render(
+      <AppLayout sidebar={<button type="button">New Project</button>}>
+        <div>Main content</div>
+      </AppLayout>
+    )
+
+    expect(screen.getByRole('button', { name: /new project/i })).toBeInTheDocument()
+  })
+
   it('has proper ARIA labels for accessibility', () => {
     render(
       <AppLayout>

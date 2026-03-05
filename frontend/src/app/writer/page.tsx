@@ -5,6 +5,7 @@ import { StartSessionRouteAdapter } from '@/modules/session/StartSessionRouteAda
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
+import { WriterTourProvider } from '@/components/walkthrough/WriterTourProvider';
 
 export default function WriterPage() {
   return (
@@ -47,6 +48,9 @@ export default function WriterPage() {
           <StartSessionRouteAdapter />
         </CardContent>
       </Card>
+      <div className="mt-4 flex justify-center">
+        <WriterTourProvider />
+      </div>
     </main>
   );
 }

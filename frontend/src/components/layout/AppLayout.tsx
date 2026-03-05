@@ -5,9 +5,15 @@ import { Menu, X } from 'lucide-react'
 
 interface AppLayoutProps {
   children: React.ReactNode
+  sidebar?: React.ReactNode
+  sidebarTitle?: string
 }
 
-export default function AppLayout({ children }: AppLayoutProps) {
+export default function AppLayout({
+  children,
+  sidebar = null,
+  sidebarTitle = 'Projects',
+}: AppLayoutProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
 
   const toggleSidebar = () => {
@@ -45,13 +51,16 @@ export default function AppLayout({ children }: AppLayoutProps) {
         data-open={isSidebarOpen}
         className={`
           fixed lg:static inset-y-0 left-0 z-40
-          w-64 bg-card border-r border-border
+          flex h-full w-64 flex-col bg-card border-r border-border
           transform transition-transform duration-200
           ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
         `}
       >
-        <div className="p-4">
-          <h2 className="text-lg font-semibold">Projects</h2>
+        <div className="border-b border-border p-4">
+          <h2 className="text-lg font-semibold">{sidebarTitle}</h2>
+        </div>
+        <div className="flex-1 min-h-0 overflow-hidden">
+          {sidebar}
         </div>
       </aside>
 
