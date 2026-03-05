@@ -4,6 +4,8 @@ vi.mock('@/server/data_access_objects/SessionDAO', () => ({
   SessionDAO: {
     findStoryRecordByVoiceSessionId: vi.fn(),
     findStoryRecordByPrepSessionId: vi.fn(),
+    findStoryRecordByCanonicalSessionId: vi.fn(),
+    findStoryRecordBySessionId: vi.fn(),
     updateStoryRecordWorkingAnswer: vi.fn(),
     upsertPrepStoryRecordWorkingAnswer: vi.fn(),
     replaceStoryRecordResponses: vi.fn(),
@@ -31,7 +33,7 @@ describe('/api/session/voice-turns', () => {
   });
 
   it('GET returns persisted working answer and turns', async () => {
-    mockSessionDAO.findStoryRecordByVoiceSessionId.mockResolvedValue({
+    mockSessionDAO.findStoryRecordByCanonicalSessionId.mockResolvedValue({
       id: 'story-1',
       sessionId: '550e8400-e29b-41d4-a716-446655440000',
       status: 'RECALL',
@@ -132,7 +134,7 @@ describe('/api/session/voice-turns', () => {
     };
 
     mockSessionDAO.upsertPrepStoryRecordWorkingAnswer.mockResolvedValue(persistedStoryRecord);
-    mockSessionDAO.findStoryRecordByPrepSessionId.mockResolvedValue(persistedStoryRecord);
+    mockSessionDAO.findStoryRecordByCanonicalSessionId.mockResolvedValue(persistedStoryRecord);
 
     const postRequest = new Request('http://localhost:3000/api/session/voice-turns', {
       method: 'POST',
@@ -169,8 +171,9 @@ describe('/api/session/voice-turns', () => {
 
     expect(getResponse.status).toBe(200);
     expect(getBody.workingAnswer).toBe('Legacy answer');
-    expect(mockSessionDAO.findStoryRecordByPrepSessionId).toHaveBeenCalledWith(
+    expect(mockSessionDAO.findStoryRecordByCanonicalSessionId).toHaveBeenCalledWith(
       '550e8400-e29b-41d4-a716-446655440000',
+      'session',
     );
   });
 
@@ -262,7 +265,7 @@ describe('/api/session/voice-turns', () => {
   });
 
   it('POST advance_question increments question progress', async () => {
-    mockSessionDAO.findStoryRecordByVoiceSessionId.mockResolvedValue({
+    mockSessionDAO.findStoryRecordByCanonicalSessionId.mockResolvedValue({
       id: 'story-1',
       sessionId: '550e8400-e29b-41d4-a716-446655440000',
       status: 'RECALL',

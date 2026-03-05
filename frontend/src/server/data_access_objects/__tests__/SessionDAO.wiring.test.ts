@@ -372,6 +372,7 @@ describe('SessionDAO — Supabase Wiring', () => {
             },
             error: null,
           })
+          .mockResolvedValueOnce({ data: null, error: null })
           .mockResolvedValueOnce({ data: null, error: null });
 
         mockSingle.mockResolvedValue({
@@ -407,6 +408,7 @@ describe('SessionDAO — Supabase Wiring', () => {
             },
             error: null,
           })
+          .mockResolvedValueOnce({ data: null, error: null })
           .mockResolvedValueOnce({ data: null, error: null });
 
         mockSingle

@@ -4,6 +4,7 @@ vi.mock('@/server/data_access_objects/SessionDAO', () => ({
   SessionDAO: {
     findStoryRecordByVoiceSessionId: vi.fn(),
     findStoryRecordByPrepSessionId: vi.fn(),
+    findStoryRecordByCanonicalSessionId: vi.fn(),
   },
 }));
 
@@ -35,8 +36,8 @@ describe('GET /api/recall/progress', () => {
     expect(response.status).toBe(400);
   });
 
-  it('routes progress lookup to prep session store when sessionSource=session', async () => {
-    mockSessionDAO.findStoryRecordByPrepSessionId.mockResolvedValue(null);
+  it('routes progress lookup via canonical resolver when sessionSource=session', async () => {
+    mockSessionDAO.findStoryRecordByCanonicalSessionId.mockResolvedValue(null);
 
     const request = new Request(
       'http://localhost:3000/api/recall/progress?sessionId=550e8400-e29b-41d4-a716-446655440000&sessionSource=session',
@@ -44,14 +45,14 @@ describe('GET /api/recall/progress', () => {
     const response = await GET(request as unknown as GetRequest);
 
     expect(response.status).toBe(200);
-    expect(mockSessionDAO.findStoryRecordByPrepSessionId).toHaveBeenCalledWith(
+    expect(mockSessionDAO.findStoryRecordByCanonicalSessionId).toHaveBeenCalledWith(
       '550e8400-e29b-41d4-a716-446655440000',
+      'session',
     );
-    expect(mockSessionDAO.findStoryRecordByVoiceSessionId).not.toHaveBeenCalled();
   });
 
-  it('routes progress lookup to voice session store when sessionSource=answer_session', async () => {
-    mockSessionDAO.findStoryRecordByVoiceSessionId.mockResolvedValue(null);
+  it('routes progress lookup via canonical resolver when sessionSource=answer_session', async () => {
+    mockSessionDAO.findStoryRecordByCanonicalSessionId.mockResolvedValue(null);
 
     const request = new Request(
       'http://localhost:3000/api/recall/progress?sessionId=550e8400-e29b-41d4-a716-446655440000&sessionSource=answer_session',
@@ -59,14 +60,14 @@ describe('GET /api/recall/progress', () => {
     const response = await GET(request as unknown as GetRequest);
 
     expect(response.status).toBe(200);
-    expect(mockSessionDAO.findStoryRecordByVoiceSessionId).toHaveBeenCalledWith(
+    expect(mockSessionDAO.findStoryRecordByCanonicalSessionId).toHaveBeenCalledWith(
       '550e8400-e29b-41d4-a716-446655440000',
+      'answer_session',
     );
-    expect(mockSessionDAO.findStoryRecordByPrepSessionId).not.toHaveBeenCalled();
   });
 
   it('returns neutral progress when story record does not exist', async () => {
-    mockSessionDAO.findStoryRecordByVoiceSessionId.mockResolvedValue(null);
+    mockSessionDAO.findStoryRecordByCanonicalSessionId.mockResolvedValue(null);
 
     const request = new Request(
       'http://localhost:3000/api/recall/progress?sessionId=550e8400-e29b-41d4-a716-446655440000&sessionSource=answer_session',
@@ -83,7 +84,7 @@ describe('GET /api/recall/progress', () => {
   });
 
   it('returns computed progress from persisted recall content', async () => {
-    mockSessionDAO.findStoryRecordByVoiceSessionId.mockResolvedValue({
+    mockSessionDAO.findStoryRecordByCanonicalSessionId.mockResolvedValue({
       id: 'story-record-1',
       sessionId: '550e8400-e29b-41d4-a716-446655440000',
       status: 'RECALL',
@@ -107,7 +108,7 @@ describe('GET /api/recall/progress', () => {
   });
 
   it('keeps zero counts for missing dimensions in non-empty corpus', async () => {
-    mockSessionDAO.findStoryRecordByVoiceSessionId.mockResolvedValue({
+    mockSessionDAO.findStoryRecordByCanonicalSessionId.mockResolvedValue({
       id: 'story-record-1',
       sessionId: '550e8400-e29b-41d4-a716-446655440000',
       status: 'RECALL',
@@ -132,7 +133,7 @@ describe('GET /api/recall/progress', () => {
   });
 
   it('returns all incomplete slots for empty corpus', async () => {
-    mockSessionDAO.findStoryRecordByVoiceSessionId.mockResolvedValue({
+    mockSessionDAO.findStoryRecordByCanonicalSessionId.mockResolvedValue({
       id: 'story-record-1',
       sessionId: '550e8400-e29b-41d4-a716-446655440000',
       status: 'RECALL',

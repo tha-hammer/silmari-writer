@@ -475,7 +475,23 @@ export const SessionDAO = {
    * Backward-compatible alias for voice-session story lookup.
    */
   async findStoryRecordBySessionId(sessionId: string): Promise<AnswerStoryRecord | null> {
-    return this.findStoryRecordByVoiceSessionId(sessionId);
+    return this.findStoryRecordByCanonicalSessionId(sessionId, 'answer_session');
+  },
+
+  async findStoryRecordByCanonicalSessionId(
+    sessionId: string,
+    preferredSource: SessionSource = 'answer_session',
+  ): Promise<AnswerStoryRecord | null> {
+    const preferred = preferredSource === 'session'
+      ? await this.findStoryRecordByPrepSessionId(sessionId)
+      : await this.findStoryRecordByVoiceSessionId(sessionId);
+    if (preferred) {
+      return preferred;
+    }
+
+    return preferredSource === 'session'
+      ? await this.findStoryRecordByVoiceSessionId(sessionId)
+      : await this.findStoryRecordByPrepSessionId(sessionId);
   },
 
   async upsertPrepStoryRecordWorkingAnswer(
@@ -509,7 +525,7 @@ export const SessionDAO = {
         );
       }
 
-      const existingStoryRecord = await this.findStoryRecordByPrepSessionId(prepSessionId);
+      const existingStoryRecord = await this.findStoryRecordByCanonicalSessionId(prepSessionId, 'session');
       if (existingStoryRecord) {
         const { data, error } = await supabase
           .from('story_records')
@@ -731,9 +747,7 @@ export const SessionDAO = {
     sessionSource: SessionSource = 'answer_session',
   ): Promise<AnswerStoryRecord | null> {
     try {
-      const storyRecord = sessionSource === 'session'
-        ? await this.findStoryRecordByPrepSessionId(sessionId)
-        : await this.findStoryRecordByVoiceSessionId(sessionId);
+      const storyRecord = await this.findStoryRecordByCanonicalSessionId(sessionId, sessionSource);
       if (!storyRecord) {
         return null;
       }
@@ -769,9 +783,7 @@ export const SessionDAO = {
     sessionSource: SessionSource = 'answer_session',
   ): Promise<AnswerStoryRecord | null> {
     try {
-      const storyRecord = sessionSource === 'session'
-        ? await this.findStoryRecordByPrepSessionId(sessionId)
-        : await this.findStoryRecordByVoiceSessionId(sessionId);
+      const storyRecord = await this.findStoryRecordByCanonicalSessionId(sessionId, sessionSource);
       if (!storyRecord) {
         return null;
       }
@@ -807,9 +819,7 @@ export const SessionDAO = {
     sessionSource: SessionSource = 'answer_session',
   ): Promise<AnswerStoryRecord | null> {
     try {
-      const storyRecord = sessionSource === 'session'
-        ? await this.findStoryRecordByPrepSessionId(sessionId)
-        : await this.findStoryRecordByVoiceSessionId(sessionId);
+      const storyRecord = await this.findStoryRecordByCanonicalSessionId(sessionId, sessionSource);
       if (!storyRecord) {
         return null;
       }

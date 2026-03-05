@@ -61,11 +61,7 @@ async function resolveStoryRecordBySource(
   sessionId: string,
   sessionSource: SessionVoiceTurnsSource,
 ) {
-  if (sessionSource === 'session') {
-    return SessionDAO.findStoryRecordByPrepSessionId(sessionId);
-  }
-
-  return SessionDAO.findStoryRecordByVoiceSessionId(sessionId);
+  return SessionDAO.findStoryRecordByCanonicalSessionId(sessionId, sessionSource);
 }
 
 export async function GET(request: NextRequest) {

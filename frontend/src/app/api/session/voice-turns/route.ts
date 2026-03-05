@@ -13,7 +13,7 @@ const SessionIdSchema = z.string().uuid();
 const SessionSourceSchema = z.enum(['answer_session', 'session']);
 const DEFAULT_QUESTION_PROGRESS = initializeQuestionProgress(DEFAULT_RECALL_QUESTIONS);
 type SessionSource = z.infer<typeof SessionSourceSchema>;
-type StoryRecord = Awaited<ReturnType<typeof SessionDAO.findStoryRecordByVoiceSessionId>>;
+type StoryRecord = Awaited<ReturnType<typeof SessionDAO.findStoryRecordBySessionId>>;
 
 const PostBodySchema = z.discriminatedUnion('action', [
   z.object({
@@ -62,11 +62,7 @@ async function resolveStoryRecordBySource(
   sessionId: string,
   sessionSource: SessionSource,
 ): Promise<StoryRecord> {
-  if (sessionSource === 'session') {
-    return SessionDAO.findStoryRecordByPrepSessionId(sessionId);
-  }
-
-  return SessionDAO.findStoryRecordByVoiceSessionId(sessionId);
+  return SessionDAO.findStoryRecordByCanonicalSessionId(sessionId, sessionSource);
 }
 
 function ensureDurableWrite(storyRecord: StoryRecord, sessionId: string, sessionSource: SessionSource) {
