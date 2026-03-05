@@ -22,6 +22,7 @@ import {
 import type { FileContentPayload } from '@/lib/file-content';
 import { useRealtimeSession } from '@/hooks/useRealtimeSession';
 import { useAutoReadAloud } from '@/hooks/useAutoReadAloud';
+import { HomeTourProvider } from '@/components/walkthrough/HomeTourProvider';
 
 export default function HomePage() {
   const {
@@ -219,13 +220,16 @@ export default function HomePage() {
             <>
               <div className="flex items-center justify-between border-b bg-background/90 px-4 py-3 backdrop-blur">
                 <p className="text-xs text-muted-foreground">Chat Workspace</p>
-                <Link
-                  href="/writer"
-                  data-testid="workflow-entry-link"
-                  className="text-xs font-medium underline underline-offset-4 hover:text-foreground"
-                >
-                  Open Writer Workflow
-                </Link>
+                <div className="flex items-center gap-2">
+                  <HomeTourProvider ready={!!activeProjectId} />
+                  <Link
+                    href="/writer"
+                    data-testid="workflow-entry-link"
+                    className="text-xs font-medium underline underline-offset-4 hover:text-foreground"
+                  >
+                    Open Writer Workflow
+                  </Link>
+                </div>
               </div>
 
               <div className="flex flex-1 min-h-0 flex-col overflow-hidden bg-muted/20">
