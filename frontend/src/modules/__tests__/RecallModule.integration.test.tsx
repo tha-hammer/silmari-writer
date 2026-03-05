@@ -76,7 +76,7 @@ function RecallLayoutWithLoader() {
   const [loaded, setLoaded] = React.useState(false);
 
   React.useEffect(() => {
-    loadRecallProgress('integration-session').then((data) => {
+    loadRecallProgress('integration-session', 'session').then((data) => {
       setProgress(data);
       setLoaded(true);
     });

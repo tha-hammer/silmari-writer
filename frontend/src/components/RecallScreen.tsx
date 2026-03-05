@@ -58,6 +58,14 @@ export interface RecallScreenProps {
 
 type VoiceSubmitStatus = 'idle' | 'listening' | 'submitting' | 'saved' | 'error';
 type EditorSaveStatus = 'idle' | 'saving' | 'saved' | 'error';
+type MoveOnBlockedReason = 'incomplete_slots' | 'advance_in_flight';
+
+interface AdvanceQuestionFlowResult {
+  advanced: boolean;
+  blockedReason?: 'advance_in_flight';
+  fromProgress: QuestionProgressState;
+  resolvedProgress: QuestionProgressState;
+}
 
 function buildRecallInstructions(
   selectedStory: Story | null | undefined,
@@ -181,6 +189,10 @@ export default function RecallScreen({
   const submittedKeysRef = useRef<Set<string>>(new Set());
   const workingAnswerRef = useRef(workingAnswer);
   const greetingEmittedRef = useRef(false);
+  const questionProgressRef = useRef(questionProgress);
+  const latestProgressRef = useRef(liveProgress);
+  const pendingProgressRefreshRef = useRef<Promise<RecallProgress> | null>(null);
+  const advanceInFlightRef = useRef(false);
 
   const isConnecting = sessionState === 'connecting';
   const isConnected = sessionState === 'connected';
@@ -191,7 +203,9 @@ export default function RecallScreen({
   );
 
   useEffect(() => {
-    setQuestionProgress(initialQuestionProgress ?? initializeQuestionProgress(questionSet));
+    const resolvedProgress = initialQuestionProgress ?? initializeQuestionProgress(questionSet);
+    questionProgressRef.current = resolvedProgress;
+    setQuestionProgress(resolvedProgress);
   }, [initialQuestionProgress, questionSet]);
 
   useEffect(() => {
@@ -206,18 +220,44 @@ export default function RecallScreen({
     workingAnswerRef.current = workingAnswer;
   }, [workingAnswer]);
 
-  const refreshProgress = useCallback(async () => {
-    if (!sessionId) {
-      return;
+  useEffect(() => {
+    questionProgressRef.current = questionProgress;
+  }, [questionProgress]);
+
+  useEffect(() => {
+    latestProgressRef.current = liveProgress;
+  }, [liveProgress]);
+
+  const refreshProgress = useCallback(async (): Promise<RecallProgress> => {
+    if (!sessionId || !sessionSource) {
+      return latestProgressRef.current;
     }
 
-    try {
-      const loadedProgress = await loadRecallProgress(sessionId);
-      setLiveProgress(loadedProgress);
-    } catch {
-      setLiveProgress(NEUTRAL_PROGRESS);
+    if (pendingProgressRefreshRef.current) {
+      return pendingProgressRefreshRef.current;
     }
-  }, [sessionId]);
+
+    const refreshPromise = (async () => {
+      try {
+        const loadedProgress = await loadRecallProgress(sessionId, sessionSource);
+        latestProgressRef.current = loadedProgress;
+        setLiveProgress(loadedProgress);
+        return loadedProgress;
+      } catch {
+        latestProgressRef.current = NEUTRAL_PROGRESS;
+        setLiveProgress(NEUTRAL_PROGRESS);
+        return NEUTRAL_PROGRESS;
+      }
+    })();
+
+    pendingProgressRefreshRef.current = refreshPromise;
+    void refreshPromise.finally(() => {
+      if (pendingProgressRefreshRef.current === refreshPromise) {
+        pendingProgressRefreshRef.current = null;
+      }
+    });
+    return refreshPromise;
+  }, [sessionId, sessionSource]);
 
   useEffect(() => {
     if (!sessionId || !sessionSource) {
@@ -238,6 +278,7 @@ export default function RecallScreen({
         }
 
         if (persistedConversation.questionProgress.total > 0) {
+          questionProgressRef.current = persistedConversation.questionProgress;
           setQuestionProgress(persistedConversation.questionProgress);
         }
 
@@ -281,42 +322,128 @@ export default function RecallScreen({
     return 'Record';
   }, [isConnected, isConnecting]);
 
-  const handleNextQuestion = useCallback(async () => {
-    const locallyAdvanced = advanceQuestionProgress(questionSet, questionProgress);
-    let resolvedProgress = locallyAdvanced;
-    setQuestionProgress(locallyAdvanced);
-    setStopControlsVisible(false);
+  const shouldAdvanceFromMoveOnIntent = useCallback((progressSnapshot: RecallProgress) => {
+    return deriveIncompleteSlots(progressSnapshot).length === 0;
+  }, []);
 
-    if (sessionId && sessionSource) {
-      try {
-        const advanced = await advanceSessionQuestion(sessionId, sessionSource);
-        resolvedProgress = advanced.questionProgress;
-        setQuestionProgress(advanced.questionProgress);
-        if (advanced.workingAnswer.trim().length > 0) {
-          setWorkingAnswer(advanced.workingAnswer);
-        }
-      } catch {
-        // Non-blocking; local progression still advances.
-      }
+  const evaluateMoveOnAfterProgressRefresh = useCallback(async () => {
+    if (pendingProgressRefreshRef.current) {
+      await pendingProgressRefreshRef.current;
+    } else if (sessionId && sessionSource) {
+      await refreshProgress();
     }
 
-    const nextQuestion = getQuestionByProgress(questionSet, resolvedProgress);
-    if (!nextQuestion) {
-      setCoachPrompt('You completed all recall questions. Moving to review.');
-      onAdvanceToReview?.();
+    const snapshot = latestProgressRef.current;
+    return {
+      snapshot,
+      incompleteSlotsSnapshot: deriveIncompleteSlots(snapshot),
+    };
+  }, [refreshProgress, sessionId, sessionSource]);
+
+  const emitMoveOnBlockedTelemetry = useCallback((
+    blockingReason: MoveOnBlockedReason,
+    incompleteSlotsSnapshot: Array<'anchors' | 'actions' | 'outcomes'>,
+  ) => {
+    if (!sessionId) {
       return;
     }
 
-    setCoachPrompt(buildOpeningCoachPrompt(selectedStory, nextQuestion.text));
-  }, [onAdvanceToReview, questionProgress, questionSet, selectedStory, sessionId, sessionSource]);
+    void emitNewPathClientEvent('recall_move_on_blocked', {
+      session_id: sessionId,
+      user_id: 'unknown_user',
+      source: 'ui',
+      session_source: sessionSource ?? 'unknown',
+      blocking_reason: blockingReason,
+      incomplete_slots: incompleteSlotsSnapshot,
+    });
+  }, [sessionId, sessionSource]);
+
+  const emitMoveOnAdvancedTelemetry = useCallback((
+    fromProgress: QuestionProgressState,
+    resolvedProgress: QuestionProgressState,
+  ) => {
+    if (!sessionId) {
+      return;
+    }
+
+    void emitNewPathClientEvent('recall_move_on_advanced', {
+      session_id: sessionId,
+      user_id: 'unknown_user',
+      source: 'ui',
+      session_source: sessionSource ?? 'unknown',
+      from_question_index: fromProgress.currentIndex,
+      to_question_index: resolvedProgress.currentIndex,
+      from_question_id: fromProgress.activeQuestionId,
+      to_question_id: resolvedProgress.activeQuestionId,
+      total_questions: resolvedProgress.total,
+    });
+  }, [sessionId, sessionSource]);
+
+  const advanceQuestionFlow = useCallback(async (): Promise<AdvanceQuestionFlowResult> => {
+    const startingProgress = questionProgressRef.current;
+    if (advanceInFlightRef.current) {
+      return {
+        advanced: false,
+        blockedReason: 'advance_in_flight',
+        fromProgress: startingProgress,
+        resolvedProgress: startingProgress,
+      };
+    }
+
+    advanceInFlightRef.current = true;
+
+    try {
+      const locallyAdvanced = advanceQuestionProgress(questionSet, startingProgress);
+      let resolvedProgress = locallyAdvanced;
+      setQuestionProgress(locallyAdvanced);
+      setStopControlsVisible(false);
+
+      if (sessionId && sessionSource) {
+        try {
+          const advanced = await advanceSessionQuestion(sessionId, sessionSource);
+          resolvedProgress = advanced.questionProgress;
+          setQuestionProgress(advanced.questionProgress);
+          if (advanced.workingAnswer.trim().length > 0) {
+            setWorkingAnswer(advanced.workingAnswer);
+          }
+        } catch {
+          // Non-blocking; local progression still advances.
+        }
+      }
+
+      const nextQuestion = getQuestionByProgress(questionSet, resolvedProgress);
+      if (!nextQuestion) {
+        setCoachPrompt('You completed all recall questions. Moving to review.');
+        onAdvanceToReview?.();
+      } else {
+        setCoachPrompt(buildOpeningCoachPrompt(selectedStory, nextQuestion.text));
+      }
+
+      return {
+        advanced: true,
+        fromProgress: startingProgress,
+        resolvedProgress,
+      };
+    } finally {
+      advanceInFlightRef.current = false;
+    }
+  }, [onAdvanceToReview, questionSet, selectedStory, sessionId, sessionSource]);
+
+  const handleNextQuestion = useCallback(async () => {
+    await advanceQuestionFlow();
+  }, [advanceQuestionFlow]);
 
   const presentStopState = useCallback(
-    (reason: 'manual_stop' | 'move_on_intent') => {
+    (
+      reason: 'manual_stop' | 'move_on_intent',
+      incompleteSlotsSnapshot?: Array<'anchors' | 'actions' | 'outcomes'>,
+    ) => {
+      const slots = incompleteSlotsSnapshot ?? incompleteSlots;
       setStopControlsVisible(true);
 
-      if (incompleteSlots.length > 0) {
+      if (slots.length > 0) {
         setCoachPrompt(
-          `Before moving on, let\'s quickly fill: ${incompleteSlots.join(', ')}. One short follow-up can make this answer much stronger.`,
+          `Before moving on, let\'s quickly fill: ${slots.join(', ')}. One short follow-up can make this answer much stronger.`,
         );
       } else {
         setCoachPrompt('You have enough detail to continue. Choose next question when ready.');
@@ -328,7 +455,7 @@ export default function RecallScreen({
           user_id: 'unknown_user',
           source: 'ui',
           stop_reason: reason,
-          incomplete_slots: incompleteSlots,
+          incomplete_slots: slots,
         });
       }
     },
@@ -405,8 +532,10 @@ export default function RecallScreen({
 
     setWorkingAnswer('');
     setLiveProgress(NEUTRAL_PROGRESS);
+    latestProgressRef.current = NEUTRAL_PROGRESS;
     const resetProgress = initializeQuestionProgress(questionSet);
     setQuestionProgress(resetProgress);
+    questionProgressRef.current = resetProgress;
     setSubmitStatus('idle');
     setEditorStatus('idle');
     setStopControlsVisible(false);
@@ -470,17 +599,48 @@ export default function RecallScreen({
       }
 
       if (detectMoveOnIntent(finalTranscriptEvent.transcript)) {
+        submittedKeysRef.current.add(finalTranscriptEvent.dedupeKey);
         const transcriptExcerpt = finalTranscriptEvent.transcript.slice(0, 120);
+        const currentIncompleteSlots = deriveIncompleteSlots(latestProgressRef.current);
 
         void emitNewPathClientEvent('recall_move_on_intent', {
           session_id: sessionId,
           user_id: 'unknown_user',
           source: 'ui',
           transcript_excerpt: transcriptExcerpt,
-          incomplete_slots_count: incompleteSlots.length,
+          incomplete_slots_count: currentIncompleteSlots.length,
         });
 
-        presentStopState('move_on_intent');
+        if (advanceInFlightRef.current) {
+          emitMoveOnBlockedTelemetry('advance_in_flight', currentIncompleteSlots);
+          presentStopState('move_on_intent', currentIncompleteSlots);
+          return;
+        }
+
+        void (async () => {
+          const { snapshot, incompleteSlotsSnapshot } = await evaluateMoveOnAfterProgressRefresh();
+          if (!shouldAdvanceFromMoveOnIntent(snapshot)) {
+            emitMoveOnBlockedTelemetry('incomplete_slots', incompleteSlotsSnapshot);
+            presentStopState('move_on_intent', incompleteSlotsSnapshot);
+            return;
+          }
+
+          disconnect();
+          const advanceResult = await advanceQuestionFlow();
+          if (!advanceResult.advanced) {
+            emitMoveOnBlockedTelemetry(
+              advanceResult.blockedReason ?? 'advance_in_flight',
+              incompleteSlotsSnapshot,
+            );
+            presentStopState('move_on_intent', incompleteSlotsSnapshot);
+            return;
+          }
+
+          emitMoveOnAdvancedTelemetry(
+            advanceResult.fromProgress,
+            advanceResult.resolvedProgress,
+          );
+        })();
         return;
       }
 
@@ -526,7 +686,11 @@ export default function RecallScreen({
       setOnEvent(null);
     };
   }, [
-    incompleteSlots.length,
+    advanceQuestionFlow,
+    disconnect,
+    emitMoveOnAdvancedTelemetry,
+    emitMoveOnBlockedTelemetry,
+    evaluateMoveOnAfterProgressRefresh,
     isConnected,
     onVoiceResponseSaved,
     persistTranscriptBySource,
@@ -535,6 +699,7 @@ export default function RecallScreen({
     sessionId,
     sessionSource,
     setOnEvent,
+    shouldAdvanceFromMoveOnIntent,
   ]);
 
   const submitStatusMessage = useMemo(() => {

@@ -9,6 +9,7 @@
  */
 
 import { frontendLogger } from '@/logging/index';
+import type { SessionVoiceTurnsSource } from '@/api_contracts/sessionVoiceTurns';
 import { UiErrors } from '@/server/error_definitions/UiErrors';
 
 // ---------------------------------------------------------------------------
@@ -43,9 +44,14 @@ export const NEUTRAL_PROGRESS: RecallProgress = {
  * On success → returns parsed RecallProgress.
  * On error → logs UI_PROGRESS_LOAD_FAILED and returns neutral state.
  */
-export async function loadRecallProgress(sessionId: string): Promise<RecallProgress> {
+export async function loadRecallProgress(
+  sessionId: string,
+  sessionSource: SessionVoiceTurnsSource,
+): Promise<RecallProgress> {
   try {
-    const response = await fetch(`/api/recall/progress?sessionId=${encodeURIComponent(sessionId)}`);
+    const response = await fetch(
+      `/api/recall/progress?sessionId=${encodeURIComponent(sessionId)}&sessionSource=${sessionSource}`,
+    );
 
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -67,7 +73,12 @@ export async function loadRecallProgress(sessionId: string): Promise<RecallProgr
     frontendLogger.error(
       'UI_PROGRESS_LOAD_FAILED',
       error instanceof Error ? error : UiErrors.ProgressLoadFailed(),
-      { module: 'RecallProgressLoader', action: 'loadRecallProgress', sessionId },
+      {
+        module: 'RecallProgressLoader',
+        action: 'loadRecallProgress',
+        sessionId,
+        sessionSource,
+      },
     );
     return NEUTRAL_PROGRESS;
   }

@@ -31,7 +31,7 @@ const mockLogger = vi.mocked(frontendLogger);
 const mockFetch = vi.fn();
 globalThis.fetch = mockFetch;
 
-const successData = { anchors: 3, actions: 5, outcomes: 2 };
+const successData = { anchors: 3, actions: 5, outcomes: 2, incompleteSlots: [] };
 
 describe('RecallProgressLoader - Step 4: Populate Progress Indicator', () => {
   beforeEach(() => {
@@ -49,21 +49,21 @@ describe('RecallProgressLoader - Step 4: Populate Progress Indicator', () => {
         json: async () => successData,
       });
 
-      const result = await loadRecallProgress('session-001');
+      const result = await loadRecallProgress('session-001', 'session');
 
-      expect(result).toEqual({ anchors: 3, actions: 5, outcomes: 2 });
+      expect(result).toEqual({ anchors: 3, actions: 5, outcomes: 2, incompleteSlots: [] });
     });
 
-    it('should call the correct API endpoint with sessionId', async () => {
+    it('should call the correct API endpoint with sessionId and sessionSource', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => successData,
       });
 
-      await loadRecallProgress('session-abc');
+      await loadRecallProgress('session-abc', 'session');
 
       expect(mockFetch).toHaveBeenCalledWith(
-        '/api/recall/progress?sessionId=session-abc',
+        '/api/recall/progress?sessionId=session-abc&sessionSource=session',
       );
     });
   });
@@ -79,7 +79,7 @@ describe('RecallProgressLoader - Step 4: Populate Progress Indicator', () => {
         json: async () => successData,
       });
 
-      const result: RecallProgress = await loadRecallProgress('session-001');
+      const result: RecallProgress = await loadRecallProgress('session-001', 'session');
 
       expect(typeof result.anchors).toBe('number');
       expect(typeof result.actions).toBe('number');
@@ -92,9 +92,14 @@ describe('RecallProgressLoader - Step 4: Populate Progress Indicator', () => {
         json: async () => ({ anchors: 'bad', actions: null, outcomes: undefined }),
       });
 
-      const result = await loadRecallProgress('session-001');
+      const result = await loadRecallProgress('session-001', 'session');
 
-      expect(result).toEqual({ anchors: 0, actions: 0, outcomes: 0 });
+      expect(result).toEqual({
+        anchors: 0,
+        actions: 0,
+        outcomes: 0,
+        incompleteSlots: undefined,
+      });
     });
 
     it('should return all three required properties', async () => {
@@ -103,7 +108,7 @@ describe('RecallProgressLoader - Step 4: Populate Progress Indicator', () => {
         json: async () => successData,
       });
 
-      const result = await loadRecallProgress('session-001');
+      const result = await loadRecallProgress('session-001', 'session');
 
       expect(result).toHaveProperty('anchors');
       expect(result).toHaveProperty('actions');
@@ -119,7 +124,7 @@ describe('RecallProgressLoader - Step 4: Populate Progress Indicator', () => {
     it('should return neutral state when fetch rejects', async () => {
       mockFetch.mockRejectedValueOnce(new Error('Network failure'));
 
-      const result = await loadRecallProgress('session-001');
+      const result = await loadRecallProgress('session-001', 'session');
 
       expect(result).toEqual(NEUTRAL_PROGRESS);
     });
@@ -127,7 +132,7 @@ describe('RecallProgressLoader - Step 4: Populate Progress Indicator', () => {
     it('should log UI_PROGRESS_LOAD_FAILED when fetch rejects', async () => {
       mockFetch.mockRejectedValueOnce(new Error('Network failure'));
 
-      await loadRecallProgress('session-001');
+      await loadRecallProgress('session-001', 'session');
 
       expect(mockLogger.error).toHaveBeenCalledWith(
         'UI_PROGRESS_LOAD_FAILED',
@@ -146,7 +151,7 @@ describe('RecallProgressLoader - Step 4: Populate Progress Indicator', () => {
         statusText: 'Internal Server Error',
       });
 
-      const result = await loadRecallProgress('session-001');
+      const result = await loadRecallProgress('session-001', 'session');
 
       expect(result).toEqual(NEUTRAL_PROGRESS);
     });
@@ -158,7 +163,7 @@ describe('RecallProgressLoader - Step 4: Populate Progress Indicator', () => {
         statusText: 'Not Found',
       });
 
-      await loadRecallProgress('session-001');
+      await loadRecallProgress('session-001', 'session');
 
       expect(mockLogger.error).toHaveBeenCalledWith(
         'UI_PROGRESS_LOAD_FAILED',

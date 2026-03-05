@@ -55,6 +55,21 @@ export const RecallMoveOnIntentEventSchema = NewPathEventCommonSchema.extend({
   incomplete_slots_count: z.number().int().nonnegative(),
 });
 
+export const RecallMoveOnBlockedEventSchema = NewPathEventCommonSchema.extend({
+  session_source: z.enum(['answer_session', 'session', 'unknown']),
+  blocking_reason: z.enum(['incomplete_slots', 'advance_in_flight']),
+  incomplete_slots: z.array(z.enum(['anchors', 'actions', 'outcomes'])).default([]),
+});
+
+export const RecallMoveOnAdvancedEventSchema = NewPathEventCommonSchema.extend({
+  session_source: z.enum(['answer_session', 'session', 'unknown']),
+  from_question_index: z.number().int().nonnegative(),
+  to_question_index: z.number().int().nonnegative(),
+  from_question_id: z.string().nullable(),
+  to_question_id: z.string().nullable(),
+  total_questions: z.number().int().positive(),
+});
+
 export const RecallWorkingAnswerSavedEventSchema = NewPathEventCommonSchema.extend({
   char_count: z.number().int().nonnegative(),
 });
@@ -75,6 +90,8 @@ export const NewPathEventSchemas = {
   recall_greeting_shown: RecallGreetingShownEventSchema,
   recall_stop_state_presented: RecallStopStatePresentedEventSchema,
   recall_move_on_intent: RecallMoveOnIntentEventSchema,
+  recall_move_on_blocked: RecallMoveOnBlockedEventSchema,
+  recall_move_on_advanced: RecallMoveOnAdvancedEventSchema,
   recall_working_answer_saved: RecallWorkingAnswerSavedEventSchema,
   recall_turn_persisted: RecallTurnPersistedEventSchema,
   recall_turn_recovered: RecallTurnRecoveredEventSchema,
@@ -90,6 +107,8 @@ export type NewPathEventPayloadMap = {
   recall_greeting_shown: z.infer<typeof RecallGreetingShownEventSchema>;
   recall_stop_state_presented: z.infer<typeof RecallStopStatePresentedEventSchema>;
   recall_move_on_intent: z.infer<typeof RecallMoveOnIntentEventSchema>;
+  recall_move_on_blocked: z.infer<typeof RecallMoveOnBlockedEventSchema>;
+  recall_move_on_advanced: z.infer<typeof RecallMoveOnAdvancedEventSchema>;
   recall_working_answer_saved: z.infer<typeof RecallWorkingAnswerSavedEventSchema>;
   recall_turn_persisted: z.infer<typeof RecallTurnPersistedEventSchema>;
   recall_turn_recovered: z.infer<typeof RecallTurnRecoveredEventSchema>;

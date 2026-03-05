@@ -434,8 +434,11 @@ describe('SessionDAO — Supabase Wiring', () => {
         expect(result?.content).toBe('legacy answer');
         expect(mockInsert).toHaveBeenCalledTimes(2);
 
-        const firstInsertPayload = mockInsert.mock.calls[0]?.[0] as Record<string, unknown>;
-        const secondInsertPayload = mockInsert.mock.calls[1]?.[0] as Record<string, unknown>;
+        const insertCalls = mockInsert.mock.calls as unknown as Array<[Record<string, unknown>]>;
+        const firstInsertPayload = insertCalls[0]?.[0];
+        const secondInsertPayload = insertCalls[1]?.[0];
+        expect(firstInsertPayload).toBeDefined();
+        expect(secondInsertPayload).toBeDefined();
         expect(firstInsertPayload).toHaveProperty('question_progress');
         expect(secondInsertPayload).not.toHaveProperty('question_progress');
       });

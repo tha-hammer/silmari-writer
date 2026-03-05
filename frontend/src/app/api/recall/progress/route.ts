@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import {
+  SessionVoiceTurnsSourceSchema,
+  type SessionVoiceTurnsSource,
+} from '@/api_contracts/sessionVoiceTurns';
 import { SessionDAO } from '@/server/data_access_objects/SessionDAO';
 import { SessionError } from '@/server/error_definitions/SessionErrors';
 
@@ -41,9 +45,9 @@ function computeRecallProgress(corpus: string) {
     };
   }
 
-  const anchors = Math.max(1, countPatternHits(trimmed, ANCHOR_PATTERNS));
-  const actions = Math.max(1, countPatternHits(trimmed, ACTION_PATTERNS));
-  const outcomes = Math.max(1, countPatternHits(trimmed, OUTCOME_PATTERNS));
+  const anchors = countPatternHits(trimmed, ANCHOR_PATTERNS);
+  const actions = countPatternHits(trimmed, ACTION_PATTERNS);
+  const outcomes = countPatternHits(trimmed, OUTCOME_PATTERNS);
 
   const incompleteSlots: Array<'anchors' | 'actions' | 'outcomes'> = [];
   if (anchors <= 0) incompleteSlots.push('anchors');
@@ -53,10 +57,23 @@ function computeRecallProgress(corpus: string) {
   return { anchors, actions, outcomes, incompleteSlots };
 }
 
+async function resolveStoryRecordBySource(
+  sessionId: string,
+  sessionSource: SessionVoiceTurnsSource,
+) {
+  if (sessionSource === 'session') {
+    return SessionDAO.findStoryRecordByPrepSessionId(sessionId);
+  }
+
+  return SessionDAO.findStoryRecordByVoiceSessionId(sessionId);
+}
+
 export async function GET(request: NextRequest) {
   const url = new URL(request.url);
   const sessionIdParam = url.searchParams.get('sessionId');
+  const sessionSourceParam = url.searchParams.get('sessionSource');
   const parsedSessionId = SessionIdSchema.safeParse(sessionIdParam);
+  const parsedSessionSource = SessionVoiceTurnsSourceSchema.safeParse(sessionSourceParam);
 
   if (!parsedSessionId.success) {
     return NextResponse.json(
@@ -64,10 +81,17 @@ export async function GET(request: NextRequest) {
       { status: 400 },
     );
   }
+  if (!parsedSessionSource.success) {
+    return NextResponse.json(
+      { code: 'INVALID_REQUEST', message: 'sessionSource must be answer_session or session' },
+      { status: 400 },
+    );
+  }
 
   try {
     const sessionId = parsedSessionId.data;
-    const storyRecord = await SessionDAO.findStoryRecordBySessionId(sessionId);
+    const sessionSource = parsedSessionSource.data;
+    const storyRecord = await resolveStoryRecordBySource(sessionId, sessionSource);
 
     if (!storyRecord) {
       return NextResponse.json(
