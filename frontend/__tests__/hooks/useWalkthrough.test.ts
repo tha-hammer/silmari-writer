@@ -3,7 +3,7 @@ import { renderHook, act } from '@testing-library/react'
 import { useWalkthrough } from '@/hooks/useWalkthrough'
 import type { WalkthroughStep } from '@/lib/walkthrough-steps'
 
-// Mock intro.js v8 API — default export is an object with a .tour() factory
+// Mock intro.js v8 API — dynamic import returns { default: { tour() } }
 const mockStart = vi.fn().mockResolvedValue(undefined)
 const mockExit = vi.fn().mockResolvedValue(undefined)
 const mockSetOptions = vi.fn()
@@ -77,9 +77,9 @@ describe('useWalkthrough', () => {
     expect(result.current.isCompleted).toBe(true)
   })
 
-  it('startTour calls introJs.tour() and sets options with steps', () => {
+  it('startTour calls introJs.tour() and sets options with steps', async () => {
     const { result } = renderHook(() => useWalkthrough('test', testSteps))
-    act(() => { result.current.startTour() })
+    await act(async () => { await result.current.startTour() })
 
     expect(mockSetOptions).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -89,16 +89,16 @@ describe('useWalkthrough', () => {
     expect(mockStart).toHaveBeenCalled()
   })
 
-  it('registers onComplete and onExit callbacks', () => {
+  it('registers onComplete and onExit callbacks', async () => {
     const { result } = renderHook(() => useWalkthrough('test', testSteps))
-    act(() => { result.current.startTour() })
+    await act(async () => { await result.current.startTour() })
     expect(mockOnComplete).toHaveBeenCalledWith(expect.any(Function))
     expect(mockOnExit).toHaveBeenCalledWith(expect.any(Function))
   })
 
-  it('onComplete callback persists completion', () => {
+  it('onComplete callback persists completion', async () => {
     const { result } = renderHook(() => useWalkthrough('test', testSteps))
-    act(() => { result.current.startTour() })
+    await act(async () => { await result.current.startTour() })
 
     // Extract and call the onComplete callback
     const completeCallback = mockOnComplete.mock.calls[0][0]

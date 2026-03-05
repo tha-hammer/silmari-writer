@@ -1,7 +1,6 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import introJs from 'intro.js'
 import {
   isTourCompleted,
   setTourCompleted,
@@ -9,11 +8,10 @@ import {
 } from '@/lib/walkthrough-persistence'
 import type { WalkthroughStep } from '@/lib/walkthrough-steps'
 
-type TourInstance = ReturnType<typeof introJs.tour>
-
 export function useWalkthrough(tourKey: string, steps: WalkthroughStep[]) {
   const [isCompleted, setIsCompleted] = useState(() => isTourCompleted(tourKey))
-  const tourRef = useRef<TourInstance | null>(null)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const tourRef = useRef<any>(null)
 
   // Cleanup on unmount
   useEffect(() => {
@@ -22,7 +20,9 @@ export function useWalkthrough(tourKey: string, steps: WalkthroughStep[]) {
     }
   }, [])
 
-  const startTour = useCallback(() => {
+  const startTour = useCallback(async () => {
+    // Dynamic import to avoid "document is not defined" during SSR
+    const introJs = (await import('intro.js')).default
     const tour = introJs.tour()
     tourRef.current = tour
 
