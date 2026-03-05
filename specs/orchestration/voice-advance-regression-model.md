@@ -123,20 +123,40 @@ The two DAO methods use different record resolution strategies. `findStoryRecord
 
 The OpenAI Realtime API accepts the session.update but doesn't auto-generate a response. The LLM waits for user speech (VAD trigger) before responding. A `response.create` event would need to be sent after the session.update to prompt the LLM to speak the new question greeting.
 
+### BUG 3: LLM Improvises Questions Instead of Reading Active Question
+
+`buildRecallInstructions` (RecallScreen.tsx:62-89) embeds the active question as context:
+```
+Active question:
+[question text from recallQuestions.ts]
+```
+
+The prompt treated this as contextual information rather than a directive. The LLM would naturally read the first question as part of its greeting, but after `session.update` with a new question, it would improvise its own questions using the "conversational interviewing" guidance instead of reading the exact question text from `DEFAULT_RECALL_QUESTIONS`.
+
+**Symptom:** First question matches `recallQuestions.ts`, subsequent questions do not.
+**Root cause:** Prompt lacked explicit instruction to read the active question verbatim.
+
 ## Change Impact Analysis
 
-**Fix 1 (FIX_RECORD):** Unify record resolution
-- Ensure `upsertPrepStoryRecordWorkingAnswer` resolves through the same path as `findStoryRecordByCanonicalSessionId`
-- OR: after advance_question, invalidate/refresh the upsert path's cached record
+**Fix 1 (FIX_RECORD):** Guard against backend questionProgress regression
+- `advanceQuestionFlow` only adopts backend `questionProgress` when `currentIndex >= locallyAdvanced.currentIndex`
+- Prevents silent DB write failure (`isMissingQuestionProgressColumnError` fallback) from regressing UI
+- **Status: APPLIED** (commit `9581775`)
 
 **Fix 2 (FIX_REPROMPT):** Send response.create after session.update
 - After `syncActiveQuestionInstructions`, send `{ type: "response.create" }` via data channel
 - This triggers the LLM to speak the new question greeting immediately
+- **Status: APPLIED** (commit `d58b85e`)
 
-**Affected steps:** Steps 4 (AdvanceWhileConnected), 5 (LLM Silence), 6 (UserBreaksSilence)
-**Affected invariants:** INV-2, INV-3, INV-6 — currently violated, fixes make them hold
-**Risk:** Fix 1 requires DAO refactoring; Fix 2 depends on OpenAI Realtime API `response.create` behavior
-**Recommendation:** Both fixes needed. Fix 2 is lower-risk (single `sendEvent` call).
+**Fix 3 (FIX_PROMPT):** Force LLM to read active question verbatim
+- Added `CRITICAL` instruction requiring word-for-word reading of the Active question
+- Restructured prompt flow: greet → read question verbatim → use follow-ups to probe deeper
+- **Status: APPLIED** (commit `da500e0`)
+
+**Affected steps:** Steps 4 (AdvanceWhileConnected), 5 (LLM Silence), 6 (UserBreaksSilence), 7 (Correction Exchange)
+**Affected invariants:** INV-2, INV-3, INV-6 — all now addressed by applied fixes
+**Risk:** Fix 1 depends on `question_progress` column migration being applied to deployed Supabase. Fix 3 depends on LLM compliance with prompt instructions (non-deterministic).
+**Recommendation:** Apply Supabase migration `20260303175356_new-migration.sql` to eliminate the silent write failure root cause.
 
 ## TLC Verification Results
 
