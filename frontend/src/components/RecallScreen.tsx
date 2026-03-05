@@ -339,8 +339,10 @@ export default function RecallScreen({
     if (sessionId && sessionSource) {
       try {
         const advanced = await advanceSessionQuestion(sessionId, sessionSource);
-        resolvedProgress = advanced.questionProgress;
-        setQuestionProgress(advanced.questionProgress);
+        if (advanced.questionProgress.currentIndex >= locallyAdvanced.currentIndex) {
+          resolvedProgress = advanced.questionProgress;
+          setQuestionProgress(advanced.questionProgress);
+        }
         if (advanced.workingAnswer.trim().length > 0) {
           setWorkingAnswer(advanced.workingAnswer);
         }
