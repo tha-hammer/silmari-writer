@@ -38,6 +38,7 @@ import {
 } from '@/lib/recallQuestions';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { Card, CardContent } from '@/components/ui/card';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -705,63 +706,78 @@ export default function RecallScreen({
   }, [editorStatus]);
 
   return (
-    <div data-testid="recall-screen" className="flex flex-col items-center gap-6 p-6">
-      <h2 className="text-xl font-semibold">Recall</h2>
+    <div
+      data-testid="recall-screen"
+      className="mx-auto flex h-[100svh] w-full max-w-3xl flex-col gap-3 overflow-y-auto px-3 py-3 sm:gap-4 sm:px-6 sm:py-6"
+    >
+      <h2 className="text-center text-lg font-semibold sm:text-xl">Recall</h2>
 
-      <section
+      <Card
         data-testid="recall-active-question"
-        className="w-full max-w-2xl rounded-md border border-border bg-card p-4"
+        className="w-full"
       >
-        <p data-testid="recall-question-progress" className="text-xs uppercase tracking-wide text-muted-foreground">
+        <CardContent className="p-3">
+          <p
+            data-testid="recall-question-progress"
+            className="hidden text-xs uppercase tracking-wide text-muted-foreground"
+          >
           Question {Math.min(questionProgress.currentIndex + 1, questionProgress.total)} of {questionProgress.total}
-        </p>
-        <p data-testid="recall-question-text" className="mt-1 text-sm text-foreground">
-          {activeQuestion?.text ?? 'All questions completed.'}
-        </p>
-      </section>
+          </p>
+          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Question</p>
+          <p data-testid="recall-question-text" className="mt-1 text-sm text-foreground sm:text-base">
+            {activeQuestion?.text ?? 'All questions completed.'}
+          </p>
+        </CardContent>
+      </Card>
 
-      <section
+      <Card
         data-testid="recall-coach-prompt"
-        className="w-full max-w-2xl rounded-md border border-border bg-card p-4"
+        className="w-full"
       >
-        <p className="text-xs uppercase tracking-wide text-muted-foreground">Coach</p>
-        <p className="mt-1 text-sm text-foreground">{coachPrompt}</p>
-      </section>
+        <CardContent className="p-3">
+          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Coach</p>
+          <p className="mt-1 text-sm text-foreground sm:text-base">{coachPrompt}</p>
+        </CardContent>
+      </Card>
 
       {selectedStory && (
-        <section
+        <Card
           data-testid="selected-story"
-          className="w-full max-w-2xl rounded-md border border-border bg-card p-4"
+          className="w-full"
         >
-          <p className="text-xs uppercase tracking-wide text-muted-foreground">Selected Story</p>
-          <h3 className="text-base font-semibold">{selectedStory.title}</h3>
-          <p className="mt-1 text-sm text-muted-foreground">{selectedStory.summary}</p>
-        </section>
+          <CardContent className="p-3">
+            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Selected Story</p>
+            <h3 className="text-sm font-semibold sm:text-base">{selectedStory.title}</h3>
+            <p className="mt-1 text-sm text-muted-foreground">{selectedStory.summary}</p>
+          </CardContent>
+        </Card>
       )}
 
-      <RecordButton
-        prominent
-        onClick={() => {
-          void handleRecord();
-        }}
-        disabled={isConnecting}
-        label={recordLabel}
-        ariaLabel={isConnected ? 'Stop recording' : 'Record'}
-      />
+      <div className="flex flex-col items-center gap-2">
+        <RecordButton
+          prominent
+          onClick={() => {
+            void handleRecord();
+          }}
+          disabled={isConnecting}
+          label={recordLabel}
+          ariaLabel={isConnected ? 'Stop recording' : 'Record'}
+        />
 
-      <p
-        data-testid="voice-model-status"
-        className="text-sm text-muted-foreground"
-      >
-        {isConnected ? 'Voice model connected. Speak now.' : 'Voice model idle.'}
-      </p>
+        <p
+          data-testid="voice-model-status"
+          className="text-center text-xs text-muted-foreground sm:text-sm"
+        >
+          {isConnected ? 'Voice model connected. Speak now.' : 'Voice model idle.'}
+        </p>
 
-      <p
-        data-testid="voice-submit-status"
-        className="text-sm text-muted-foreground"
-      >
-        {submitStatusMessage}
-      </p>
+        <p
+          data-testid="voice-submit-status"
+          className="text-center text-xs text-muted-foreground sm:text-sm"
+        >
+          {submitStatusMessage}
+        </p>
+      </div>
 
       {voiceError && (
         <p data-testid="voice-model-error" role="alert" className="text-sm text-red-600">
@@ -769,124 +785,135 @@ export default function RecallScreen({
         </p>
       )}
 
-      <section
+      <Card
         data-testid="working-answer-panel"
-        className="w-full max-w-2xl rounded-md border border-border bg-card p-4"
+        className="w-full"
       >
-        <div className="mb-2 flex items-center justify-between gap-3">
-          <p className="text-sm font-semibold">Working answer</p>
-          <div className="flex items-center gap-3">
-            <span data-testid="working-answer-status" className="text-xs text-muted-foreground">
-              {editorStatusMessage}
-            </span>
-            <span data-testid="working-answer-copy-status" className="text-xs text-muted-foreground">
-              {copyStatus === 'copied'
-                ? 'Copied to clipboard.'
-                : copyStatus === 'error'
-                  ? 'Copy failed.'
-                  : ''}
-            </span>
+        <CardContent className="p-3">
+          <div className="mb-2 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+            <p className="text-sm font-semibold">Working answer</p>
+            <div className="flex items-center gap-3">
+              <span data-testid="working-answer-status" className="text-xs text-muted-foreground">
+                {editorStatusMessage}
+              </span>
+              <span data-testid="working-answer-copy-status" className="text-xs text-muted-foreground">
+                {copyStatus === 'copied'
+                  ? 'Copied to clipboard.'
+                  : copyStatus === 'error'
+                    ? 'Copy failed.'
+                    : ''}
+              </span>
+            </div>
           </div>
-        </div>
 
-        <Textarea
-          data-testid="working-answer-editor"
-          value={workingAnswer}
-          onChange={(event) => {
-            setWorkingAnswer(event.target.value);
-            setEditorStatus('idle');
-          }}
-          onBlur={() => {
-            void persistWorkingAnswer();
-          }}
-          placeholder="Your evolving answer appears here. You can edit it anytime."
-          className="min-h-32"
-        />
-
-        <div className="mt-3 flex flex-wrap gap-2">
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            className="w-full sm:w-auto"
-            onClick={() => {
+          <Textarea
+            data-testid="working-answer-editor"
+            value={workingAnswer}
+            onChange={(event) => {
+              setWorkingAnswer(event.target.value);
+              setEditorStatus('idle');
+            }}
+            onBlur={() => {
               void persistWorkingAnswer();
             }}
-          >
-            Save edits
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            data-testid="copy-working-answer-button"
-            className="w-full sm:w-auto"
-            onClick={() => {
-              void handleCopyWorkingAnswer();
-            }}
-            disabled={!workingAnswer.trim()}
-          >
-            {copyStatus === 'copied' ? 'Copied!' : 'Copy answer'}
-          </Button>
-        </div>
-      </section>
-
-      {stopControlsVisible && (
-        <section
-          data-testid="recall-stop-controls"
-          className="w-full max-w-2xl rounded-md border border-amber-200 bg-amber-50 p-4 text-amber-950"
-        >
-          <p className="text-sm font-semibold">Recording stopped</p>
-          <p className="mt-1 text-sm">
-            You can re-record, start over, or move to the next question.
-          </p>
-
-          {incompleteSlots.length > 0 && (
-            <p data-testid="incomplete-slot-guidance" className="mt-2 text-sm">
-              Still missing: {incompleteSlots.join(', ')}.
-            </p>
-          )}
+            placeholder="Your evolving answer appears here. You can edit it anytime."
+            className="min-h-24 max-h-40 text-sm sm:min-h-32"
+          />
 
           <div className="mt-3 flex flex-wrap gap-2">
             <Button
               type="button"
-              size="sm"
-              onClick={() => {
-                setStopControlsVisible(false);
-                void handleRecord();
-              }}
-            >
-              Re-record
-            </Button>
-
-            <Button
-              type="button"
-              size="sm"
               variant="secondary"
+              size="sm"
+              className="w-full sm:w-auto"
               onClick={() => {
-                void handleStartOver();
+                void persistWorkingAnswer();
               }}
             >
-              Start over
+              Save edits
             </Button>
-
             <Button
               type="button"
-              size="sm"
               variant="outline"
+              size="sm"
+              data-testid="copy-working-answer-button"
+              className="w-full sm:w-auto"
               onClick={() => {
-                void handleNextQuestion();
+                void handleCopyWorkingAnswer();
               }}
+              disabled={!workingAnswer.trim()}
             >
-              {questionProgress.currentIndex >= questionProgress.total - 1
-                ? 'Finish to Review'
-                : 'Next question'}
+              {copyStatus === 'copied' ? 'Copied!' : 'Copy answer'}
             </Button>
           </div>
-        </section>
+        </CardContent>
+      </Card>
+
+      {stopControlsVisible && (
+        <Card
+          data-testid="recall-stop-controls"
+          className="w-full border-amber-200 bg-amber-50 text-amber-950"
+        >
+          <CardContent className="p-3">
+            <p className="text-sm font-semibold">Recording stopped</p>
+            <p className="mt-1 text-sm">
+              You can re-record, start over, or move to the next question.
+            </p>
+
+            {incompleteSlots.length > 0 && (
+              <p data-testid="incomplete-slot-guidance" className="mt-2 text-sm">
+                Still missing: {incompleteSlots.join(', ')}.
+              </p>
+            )}
+
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button
+                type="button"
+                size="sm"
+                className="w-full sm:w-auto"
+                onClick={() => {
+                  setStopControlsVisible(false);
+                  void handleRecord();
+                }}
+              >
+                Re-record
+              </Button>
+
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                className="w-full sm:w-auto"
+                onClick={() => {
+                  void handleStartOver();
+                }}
+              >
+                Start over
+              </Button>
+
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="w-full sm:w-auto"
+                onClick={() => {
+                  void handleNextQuestion();
+                }}
+              >
+                {questionProgress.currentIndex >= questionProgress.total - 1
+                  ? 'Finish to Review'
+                  : 'Next question'}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
-      <ProgressIndicator progress={liveProgress} />
+      <Card className="w-full">
+        <CardContent className="p-3">
+          <ProgressIndicator progress={liveProgress} />
+        </CardContent>
+      </Card>
     </div>
   );
 }

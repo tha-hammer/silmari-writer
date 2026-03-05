@@ -30,7 +30,7 @@ export interface RecordButtonProps {
 // ---------------------------------------------------------------------------
 
 const PROMINENT_CLASSES =
-  'text-4xl rounded-full w-32 h-32 bg-red-600 hover:bg-red-700 text-white font-bold shadow-lg transition-colors focus:outline-none focus:ring-4 focus:ring-red-300';
+  'rounded-full w-24 h-24 text-3xl sm:w-32 sm:h-32 sm:text-4xl bg-red-600 hover:bg-red-700 text-white font-bold shadow-lg transition-colors focus:outline-none focus:ring-4 focus:ring-red-300';
 
 const DEFAULT_CLASSES =
   'text-lg rounded-full w-16 h-16 bg-red-500 hover:bg-red-600 text-white font-medium shadow transition-colors focus:outline-none focus:ring-2 focus:ring-red-300';

@@ -33,33 +33,31 @@ export default function ProgressIndicator({ progress }: ProgressIndicatorProps) 
   };
 
   return (
-    <div data-testid="progress-indicator" className="flex flex-col gap-2 p-4">
-      <div className="flex items-center justify-between" data-testid="progress-anchors">
-        <div>
-          <span className="text-sm font-medium text-gray-700">Anchors</span>
-          <p className="text-xs text-muted-foreground" data-testid="progress-anchors-help">
+    <div data-testid="progress-indicator" className="flex flex-col gap-2">
+      <div className="grid grid-cols-3 gap-2">
+        <div data-testid="progress-anchors" className="rounded-md border bg-muted/40 p-2 text-center">
+          <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Anchors</span>
+          <p className="text-lg font-semibold leading-tight text-foreground">{progress.anchors}</p>
+          <p className="mt-1 hidden text-xs text-muted-foreground sm:block" data-testid="progress-anchors-help">
             {helperCopy.anchors}
           </p>
         </div>
-        <span className="text-lg font-bold text-gray-900">{progress.anchors}</span>
-      </div>
-      <div className="flex items-center justify-between" data-testid="progress-actions">
-        <div>
-          <span className="text-sm font-medium text-gray-700">Actions</span>
-          <p className="text-xs text-muted-foreground" data-testid="progress-actions-help">
+
+        <div data-testid="progress-actions" className="rounded-md border bg-muted/40 p-2 text-center">
+          <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Actions</span>
+          <p className="text-lg font-semibold leading-tight text-foreground">{progress.actions}</p>
+          <p className="mt-1 hidden text-xs text-muted-foreground sm:block" data-testid="progress-actions-help">
             {helperCopy.actions}
           </p>
         </div>
-        <span className="text-lg font-bold text-gray-900">{progress.actions}</span>
-      </div>
-      <div className="flex items-center justify-between" data-testid="progress-outcomes">
-        <div>
-          <span className="text-sm font-medium text-gray-700">Outcomes</span>
-          <p className="text-xs text-muted-foreground" data-testid="progress-outcomes-help">
+
+        <div data-testid="progress-outcomes" className="rounded-md border bg-muted/40 p-2 text-center">
+          <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Outcomes</span>
+          <p className="text-lg font-semibold leading-tight text-foreground">{progress.outcomes}</p>
+          <p className="mt-1 hidden text-xs text-muted-foreground sm:block" data-testid="progress-outcomes-help">
             {helperCopy.outcomes}
           </p>
         </div>
-        <span className="text-lg font-bold text-gray-900">{progress.outcomes}</span>
       </div>
 
       {incompleteSlots.size > 0 && (
