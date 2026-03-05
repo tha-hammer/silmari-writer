@@ -134,7 +134,8 @@ Active question:
 The prompt treated this as contextual information rather than a directive. The LLM would naturally read the first question as part of its greeting, but after `session.update` with a new question, it would improvise its own questions using the "conversational interviewing" guidance instead of reading the exact question text from `DEFAULT_RECALL_QUESTIONS`.
 
 **Symptom:** First question matches `recallQuestions.ts`, subsequent questions do not.
-**Root cause:** Prompt lacked explicit instruction to read the active question verbatim.
+**Root cause (layer 1):** Prompt lacked explicit instruction to read the active question verbatim.
+**Root cause (layer 2):** OpenAI Realtime API conversation history bleeds through `session.update`. Even with a verbatim prompt directive, the LLM weighs accumulated conversation turns over the new system message and improvises questions from context. The fix requires passing `instructions` directly in `response.create` as a per-inference override.
 
 ## Change Impact Analysis
 
@@ -143,10 +144,11 @@ The prompt treated this as contextual information rather than a directive. The L
 - Prevents silent DB write failure (`isMissingQuestionProgressColumnError` fallback) from regressing UI
 - **Status: APPLIED** (commit `9581775`)
 
-**Fix 2 (FIX_REPROMPT):** Send response.create after session.update
-- After `syncActiveQuestionInstructions`, send `{ type: "response.create" }` via data channel
-- This triggers the LLM to speak the new question greeting immediately
-- **Status: APPLIED** (commit `d58b85e`)
+**Fix 2 (FIX_REPROMPT):** Send response.create with per-inference instructions override
+- After `syncActiveQuestionInstructions`, send `{ type: "response.create", response: { instructions } }` via data channel
+- The `instructions` field in `response.create` overrides session-level instructions for that specific inference, bypassing conversation history bleed-through
+- This both triggers the LLM to speak and forces it to use the updated question
+- **Status: APPLIED** (commits `d58b85e`, `51ffe29`)
 
 **Fix 3 (FIX_PROMPT):** Force LLM to read active question verbatim
 - Added `CRITICAL` instruction requiring word-for-word reading of the Active question
