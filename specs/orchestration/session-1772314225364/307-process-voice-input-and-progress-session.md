@@ -70,3 +70,9 @@ User sees the session advance from INIT to the next state with their spoken answ
 ## Feedback Loops
 
 If voice transcription or processing fails, the system prompts the user to retry voice input, with a maximum of 2 retries before surfacing an error message.
+
+## Current Runtime Wiring (2026-03-04)
+
+- `api-n8k2` accepts `INIT`, `IN_PROGRESS`, and `RECALL` for `answer_sessions`.
+- When the same `sessionId` resolves to a prep/session workflow, `api-n8k2` returns an invalid-state error directing callers to `/api/session/voice-turns` for Recall persistence.
+- Question index progression for Recall prompts is not persisted through `/api/session/voice-response`; it is persisted through `/api/session/voice-turns` action `advance_question`.

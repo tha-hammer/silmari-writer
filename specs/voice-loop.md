@@ -39,6 +39,19 @@ Leading KPIs:
 2. `GET /api/sessions/[id]` returns `SessionView` from `answer_sessions` or `sessions`.
 3. `SessionWorkflowShell` maps backend state to UI stage and renders stage module.
 
+## Session Source Boundary (2026-03-04)
+Two intentional workflow sources are supported and now guarded explicitly:
+
+| Source | Backing table | Typical state model | Recall persistence path |
+|---|---|---|---|
+| `answer_session` | `answer_sessions` | `INIT`, `IN_PROGRESS`, `RECALL`, `...` | `/api/session/voice-response` + `/api/session/voice-turns` |
+| `session` | `sessions` | `initialized`, `DRAFT`, `ACTIVE`, `...` | `/api/session/voice-turns` only |
+
+Boundary guarantees:
+- `sessionSource` is required on voice-turns read/write contracts.
+- Recall submit is source-aware and fail-closed when source is missing.
+- `/api/session/voice-response` rejects legacy-source IDs with deterministic mismatch semantics after auth/ownership checks.
+
 ## State Model
 
 ### Backend Session States
@@ -52,6 +65,7 @@ Common states observed in the workflow implementation:
 |---|---|---|
 | `ORIENT` | `ORIENT` | `OrientStoryModule` |
 | `INIT` | Source-aware: `ORIENT` when `SessionView.questionId` exists; otherwise `RECALL_REVIEW` | `OrientStoryModule` or `WritingFlowModule` |
+| `initialized` | `RECALL_REVIEW` | `WritingFlowModule` |
 | `IN_PROGRESS`, `RECALL`, `COMPLETE`, `VERIFY`, `REVIEW` | `RECALL_REVIEW` | `WritingFlowModule` |
 | `DRAFT`, `DRAFT_ENABLED`, `ACTIVE` | `DRAFT` | `ReviewWorkflowModule` |
 | `FINALIZE` | `FINALIZE` | `AnswerModule` |
@@ -81,8 +95,13 @@ Common states observed in the workflow implementation:
 - UI: `RecallScreen`, `RecordButton`, `ProgressIndicator`, `VoiceSessionComponent`, `RecallSlotPrompt`
 - APIs:
   - `POST /api/session/voice-response`
+  - `GET|POST /api/session/voice-turns`
   - `POST /api/session/submit-slots`
 - Path specs: `303`, `307`, `317-320`
+- Source-aware runtime contract:
+  - `sessionSource='answer_session'`: final transcript -> `submitVoiceResponse` then `voice-turns` working-answer update.
+  - `sessionSource='session'`: final transcript skips `submitVoiceResponse` and persists via `voice-turns` only.
+  - missing `sessionSource`: fail closed (no persistence call).
 
 ### VERIFY / Claim Confirmation
 - APIs:
@@ -165,6 +184,27 @@ Realtime voice is server-proxied and never calls OpenAI directly from the client
 }
 ```
 
+### `SessionVoiceTurnsRequest` (source-aware)
+```ts
+{
+  sessionId: string; // uuid
+  sessionSource: 'answer_session' | 'session';
+  action: 'update_working_answer' | 'reset_turns' | 'advance_question';
+  content?: string;
+}
+```
+
+### `SessionVoiceTurnsResponse` (source-aware)
+```ts
+{
+  sessionId: string; // uuid
+  sessionSource: 'answer_session' | 'session';
+  workingAnswer: string;
+  turns: string[];
+  questionProgress: QuestionProgressState;
+}
+```
+
 ## Error Model
 Route handlers return typed JSON errors:
 ```json
@@ -176,6 +216,14 @@ Key domains in the `/writer` flow:
 - `SlotError` (slot prompting)
 - `ApprovalError` (review approval)
 - `FinalizeAnswerError` / `AnswerError` (finalize/export)
+
+Voice-response boundary semantics:
+- `401 UNAUTHORIZED`: missing/invalid Authorization header.
+- `404 SESSION_NOT_FOUND`: no owned matching session in either model.
+- `409 INVALID_STATE`: owned ID belongs to prep/session workflow (use `/api/session/voice-turns`).
+
+Operational resilience from debug:
+- Legacy prep-story upsert tolerates temporary Supabase schema-cache drift for `story_records.question_progress` by retrying create without that column.
 
 ## Traceability to Orchestration Specs
 - Session bootstrap: `293-296`, `302`, `306-312`

@@ -30,6 +30,15 @@ ORIENT ──(story selected)──→ RECALL ──(minimum slots met)──→
                                                                               └─ all met → VERIFY
 ```
 
+### RECALL Source-Aware Persistence
+- `sessionSource='answer_session'`:
+  - final transcript persists through `/api/session/voice-response`
+  - working answer and question progress persist through `/api/session/voice-turns`
+- `sessionSource='session'`:
+  - final transcript skips `/api/session/voice-response`
+  - persistence uses `/api/session/voice-turns` only
+- missing `sessionSource`: fail-closed behavior, no transcript submit.
+
 ## API Endpoints
 
 | Method | Path | Request | Response |
@@ -38,6 +47,8 @@ ORIENT ──(story selected)──→ RECALL ──(minimum slots met)──→
 | `GET` | `/api/story/orient-context` | `?questionId=...` | `{ question, jobRequirements, stories }` |
 | `POST` | `/api/story/confirm` | `ConfirmStoryRequestSchema` | Confirmation result |
 | `POST` | `/api/session/voice-response` | Voice transcript payload | Processed voice response |
+| `GET` | `/api/session/voice-turns` | `?sessionId=...&sessionSource=answer_session|session` | `{ sessionId, sessionSource, workingAnswer, turns, questionProgress }` |
+| `POST` | `/api/session/voice-turns` | `{ sessionId, sessionSource, action, ... }` | `{ sessionId, sessionSource, workingAnswer, turns, questionProgress }` |
 | `POST` | `/api/session/submit-slots` | `{ sessionId, questionType, slotValues, attemptCount }` | `{ prompts, attemptCount, guidanceHint? }` |
 
 ## UI Components
@@ -61,6 +72,10 @@ ORIENT ──(story selected)──→ RECALL ──(minimum slots met)──→
 |-------|------------|
 | `stories` | `id`, `session_id`, `story_title`, `context`, `anchors`, `people[]`, `objective` |
 | `story_records` | Full StoryRecord schema (see voice-loop.md §2) |
+
+Legacy prep-session durability notes:
+- For `sessionSource='session'`, first working-answer write creates a prep-linked `story_records.session_id` row if missing.
+- If Supabase schema cache is stale for `question_progress`, creation retries without that column to preserve durable save behavior.
 
 ## LLM Contracts
 
@@ -102,6 +117,9 @@ ORIENT ──(story selected)──→ RECALL ──(minimum slots met)──→
 | `WORKFLOW_GUARD_VIOLATION` | 409 | Zero newly satisfied slots |
 | `VOICE_RECOGNITION_ERROR` | — | Transcript empty or recognition failure |
 | `SLOT_PARSING_ERROR` | — | No recognizable slots in utterance |
+| `UNAUTHORIZED` | 401 | Missing/invalid auth on `/api/session/voice-response` |
+| `INVALID_STATE` | 409 | Owned prep/session ID sent to `/api/session/voice-response` |
+| `SESSION_NOT_FOUND` | 404 | Missing/unauthorized ID in `/api/session/voice-response` |
 
 ---
 

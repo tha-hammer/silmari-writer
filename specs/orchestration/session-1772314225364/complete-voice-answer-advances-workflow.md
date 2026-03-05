@@ -68,3 +68,9 @@ User hears the system stop follow-up slot questions for the current question_typ
 ## Feedback Loops
 
 If minimum required slots are not satisfied after parsing, the system re-prompts for missing slots with a maximum of 3 iterative clarification attempts before emitting a validation error and halting progression.
+
+## Current Runtime Wiring (2026-03-04)
+
+- The Recall UI listens for transcript phrases such as `next question`, `move on`, and `let's continue` from realtime transcription events.
+- Detected move-on intent currently presents a stop-state panel and guidance copy.
+- Progression to the next question is currently executed from an explicit user action (`Next question` / `Finish to Review`) in stop-state controls, which calls `/api/session/voice-turns` action `advance_question`.

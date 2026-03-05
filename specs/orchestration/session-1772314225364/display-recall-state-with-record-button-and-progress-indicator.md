@@ -58,3 +58,12 @@ User sees the RECALL interface with a prominent record button and a visible prog
 ## Feedback Loops
 
 None — strictly linear.
+
+## Current Runtime Wiring (2026-03-04)
+
+- The RECALL UI renders question progression (`Question X of Y`) from local `questionProgress` state and binds active prompt text from that state.
+- Progression is synchronized through `/api/session/voice-turns` with action `advance_question`.
+- `ui-y5t3` currently fetches `/api/recall/progress?sessionId=<uuid>` and does not send a source discriminator.
+- The progress API computes Anchors/Actions/Outcomes from `story_records.content + story_records.responses`.
+- Progress lookup uses `SessionDAO.findStoryRecordBySessionId(sessionId)`, which is an alias to a `voice_session_id` lookup path.
+- On retrieval failure or missing record, the UI renders a neutral progress state (`anchors/actions/outcomes = 0`).

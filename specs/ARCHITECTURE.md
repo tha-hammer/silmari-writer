@@ -53,11 +53,25 @@ Browser
 
 | Backend state | UI stage | Module |
 |---|---|---|
-| `INIT`, `ORIENT` | `ORIENT` | `OrientStoryModule` |
+| `ORIENT` | `ORIENT` | `OrientStoryModule` |
+| `INIT` | Source-aware: `ORIENT` when `questionId` exists; otherwise `RECALL_REVIEW` | `OrientStoryModule` or `WritingFlowModule` |
+| `initialized` | `RECALL_REVIEW` | `WritingFlowModule` |
 | `IN_PROGRESS`, `RECALL`, `COMPLETE`, `VERIFY`, `REVIEW` | `RECALL_REVIEW` | `WritingFlowModule` |
 | `DRAFT`, `DRAFT_ENABLED`, `ACTIVE` | `DRAFT` | `ReviewWorkflowModule` |
 | `FINALIZE` | `FINALIZE` | `AnswerModule` |
 | `FINALIZED` | `FINALIZED` | `FinalizedAnswerModule` |
+
+## Dual Workflow Boundary
+
+| Session source | Backing table | Typical states | Voice submit endpoint |
+|---|---|---|---|
+| `answer_session` | `answer_sessions` | `INIT`, `IN_PROGRESS`, `RECALL`, `...` | `/api/session/voice-response` |
+| `session` | `sessions` | `initialized`, `DRAFT`, `ACTIVE`, `...` | `/api/session/voice-turns` (no voice-response) |
+
+Guardrails implemented:
+- `sessionSource` is a required API contract field for `/api/session/voice-turns`.
+- `SessionWorkflowShell` forwards source to `WritingFlowModule` and `RecallScreen`.
+- `RecallScreen` uses source-aware persistence and fails closed when source is missing.
 
 ## Server Architecture (request path)
 
@@ -90,6 +104,8 @@ Route Handler (app/api/*)
 | `GET` | `/api/story/orient-context` | Load question + requirements + stories |
 | `POST` | `/api/story/confirm` | Confirm aligned story selection |
 | `POST` | `/api/session/voice-response` | Process transcript and progress session |
+| `GET` | `/api/session/voice-turns` | Read source-specific working-answer persistence |
+| `POST` | `/api/session/voice-turns` | Write source-specific working-answer persistence |
 | `POST` | `/api/session/submit-slots` | Re-prompt and collect missing required slots |
 | `POST` | `/api/truth-checks/confirm` | Confirm / deny key claim |
 | `POST` | `/api/verification/initiate` | Start verification flow |
@@ -114,13 +130,23 @@ Route Handler (app/api/*)
 - `id`, `user_id`, `state`, `created_at`, `updated_at`
 
 ### `story_records`
-- `id`, `voice_session_id` (legacy fallback `session_id`), `status`, `content`, timestamps
+- `id`, `voice_session_id` (legacy fallback `session_id`), `status`, `content`, `responses`, optional `question_progress`, timestamps
 
 ### Workflow-linked entities
 - `truth_checks` (verification outcomes)
 - `claims`, `verification_requests`
 - `answers` / `content` (review + finalize)
 - `session_metrics`, `events`, analytics tables
+
+## Voice-Response Auth & Mismatch Semantics
+- `/api/session/voice-response` now authenticates at route entry (`AuthAndValidationFilter`).
+- Handler resolves answer session with ownership check before processing.
+- When an owned legacy prep-session ID is posted to voice-response, handler returns deterministic `409 INVALID_STATE` with guidance to use `/api/session/voice-turns`.
+- Unauthenticated (`401`) or unauthorized (`404`) calls do not leak source/type existence details.
+
+## Debug-Driven Resilience
+- Prep-session story-record creation includes a fallback for Supabase schema-cache drift:
+  - if `question_progress` column is temporarily missing in schema cache, DAO retries insert without `question_progress` so persistence remains durable.
 
 ## Realtime Voice Architecture
 
